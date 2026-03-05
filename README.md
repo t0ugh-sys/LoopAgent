@@ -46,6 +46,20 @@ $env:PYTHONPATH="src"
 conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --output json --include-history
 ```
 
+事件落盘（JSONL）：
+
+```powershell
+$env:PYTHONPATH="src"
+conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --observer-file .\events.jsonl
+```
+
+失败返回非零退出码（适合 CI）：
+
+```powershell
+$env:PYTHONPATH="src"
+conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --strategy json_stub --max-steps 1 --exit-on-failure
+```
+
 示例 `goal.txt` 请用 UTF-8 保存，例如内容为：
 
 ```
