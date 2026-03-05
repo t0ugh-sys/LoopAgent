@@ -17,10 +17,12 @@ python -m unittest discover -s tests -p "test_*.py" -v
 ## NPM 一键安装运行（Node 用户）
 
 ```bash
-npm i -g @t0ugh-sys/loopagent
+npm i -g git+https://github.com/t0ugh-sys/LoopAgent.git
 loopagent tools
 loopagent code --goal "inspect README then finish" --workspace . --provider mock --model mock-v3 --output json
 ```
+
+> 注意：`npm i -g @t0ugh-sys/loopagent` 仅在包已发布到 npm registry 后可用；未发布会返回 404。
 
 说明：
 

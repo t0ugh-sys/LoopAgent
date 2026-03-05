@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .agent_protocol import AgentStep, ToolResult, parse_agent_step, render_agent_step_schema
+from .agent_protocol import ToolResult, parse_agent_step, render_agent_step_schema
 from .core.agent import LoopAgent
-from .core.types import RunResult, StepContext, StepResult, StopConfig
+from .core.types import ContextProviderFn, ObserverFn, RunResult, StepContext, StepResult, StopConfig
 from .tools import ToolContext, build_default_tools, execute_tool_call
 
-DeciderFn = Callable[[str, tuple[str, ...], tuple[ToolResult, ...]], str]
+DeciderFn = Callable[[str, tuple[str, ...], tuple[ToolResult, ...], dict[str, object], tuple[str, ...]], str]
 
 
 @dataclass(frozen=True)
@@ -23,14 +23,25 @@ def build_coding_step(decider: DeciderFn, workspace_root: Path) -> Callable[[Ste
     tool_context = ToolContext(workspace_root=workspace_root)
 
     def step(context: StepContext[CodingAgentState]) -> StepResult[CodingAgentState]:
-        raw = decider(context.goal, context.state.history, context.state.tool_results)
+        raw = decider(
+            context.goal,
+            context.state.history,
+            context.state.tool_results,
+            context.state_summary,
+            context.last_steps,
+        )
         parsed = parse_agent_step(raw)
         if parsed is None:
             output = (
                 'invalid agent step json. expected schema: '
                 + render_agent_step_schema()
             )
-            return StepResult(output=output, state=context.state, done=False, metadata={'parse_error': True})
+            return StepResult(
+                output=output,
+                state=context.state,
+                done=False,
+                metadata={'parse_error': True, 'raw_response': raw[:2000]},
+            )
 
         executed: list[ToolResult] = []
         for tool_call in parsed.tool_calls:
@@ -43,10 +54,24 @@ def build_coding_step(decider: DeciderFn, workspace_root: Path) -> Callable[[Ste
             history.append(f'tool[{item.id}] {status}')
 
         new_state = CodingAgentState(history=tuple(history), tool_results=tuple(executed))
+        metadata = {
+            'thought': parsed.thought,
+            'plan': parsed.plan,
+            'tool_calls': [
+                {'id': call.id, 'name': call.name, 'arguments': dict(call.arguments)}
+                for call in parsed.tool_calls
+            ],
+            'tool_results': [
+                {'id': item.id, 'ok': item.ok, 'error': item.error, 'output': item.output[:2000]}
+                for item in executed
+            ],
+            'state_summary': context.state_summary,
+            'last_steps': list(context.last_steps),
+        }
         if parsed.done:
             final = parsed.final or ''
-            return StepResult(output=final, state=new_state, done=True)
-        return StepResult(output='continue', state=new_state, done=False)
+            return StepResult(output=final, state=new_state, done=True, metadata=metadata)
+        return StepResult(output='continue', state=new_state, done=False, metadata=metadata)
 
     return step
 
@@ -57,8 +82,14 @@ def run_coding_agent(
     decider: DeciderFn,
     workspace_root: Path,
     stop: StopConfig | None = None,
+    observer: ObserverFn | None = None,
+    context_provider: ContextProviderFn | None = None,
 ) -> RunResult[CodingAgentState]:
     step = build_coding_step(decider, workspace_root=workspace_root)
     agent = LoopAgent(step=step, stop=stop or StopConfig(max_steps=20, max_elapsed_s=60.0))
-    return agent.run(goal=goal, initial_state=CodingAgentState())
-
+    return agent.run(
+        goal=goal,
+        initial_state=CodingAgentState(),
+        observer=observer,
+        context_provider=context_provider,
+    )

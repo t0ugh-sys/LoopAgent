@@ -73,7 +73,7 @@ def parse_agent_step(raw: str) -> AgentStep | None:
 def render_agent_step_schema() -> str:
     return (
         '{"thought":"...","plan":["..."],'
-        '"tool_calls":[{"id":"call_1","name":"read_file","arguments":{"path":"README.md"}}],'
+        '"tool_calls":[{"id":"call_1","name":"read_file","arguments":{"path":"README.md"}},'
+        '{"id":"call_2","name":"apply_patch","arguments":{"patch":"*** Begin Patch\\n*** Update File: README.md\\n@@\\n-old\\n+new\\n*** End Patch"}}],'
         '"final":null}'
     )
-

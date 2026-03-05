@@ -128,6 +128,7 @@ class LoopAgent(Generic[StateT]):
                     'step': step_index,
                     'done': result.done,
                     'output': result.output,
+                    'metadata': result.metadata,
                 },
             )
 

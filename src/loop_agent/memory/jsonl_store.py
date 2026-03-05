@@ -138,7 +138,7 @@ class JsonlMemoryStore:
                     state['facts'] = [item for item in facts if isinstance(item, str)]
 
             if event == 'step_started':
-                state['steps'] = int(payload.get('step', state['steps']))
+                state['steps'] = int(payload.get('step', state['steps'])) + 1
                 plan = payload.get('plan', [])
                 if isinstance(plan, list):
                     state['current_plan'] = [item for item in plan if isinstance(item, str)]
@@ -147,6 +147,20 @@ class JsonlMemoryStore:
                 output = payload.get('output', '')
                 if isinstance(output, str) and output:
                     state['work_done'].append(output)
+                metadata = payload.get('metadata', {})
+                if isinstance(metadata, dict):
+                    plan = metadata.get('plan', [])
+                    if isinstance(plan, list):
+                        state['current_plan'] = [item for item in plan if isinstance(item, str)]
+                    tool_results = metadata.get('tool_results', [])
+                    if isinstance(tool_results, list):
+                        for item in tool_results:
+                            if not isinstance(item, dict):
+                                continue
+                            tool_id = item.get('id')
+                            ok = item.get('ok')
+                            if isinstance(tool_id, str) and isinstance(ok, bool):
+                                state['work_done'].append(f'tool[{tool_id}] {"ok" if ok else "failed"}')
 
             if event == 'step_failed':
                 error = payload.get('error', '')
