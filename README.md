@@ -14,6 +14,19 @@ python -m pip install -e .
 python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
+## NPM 一键安装运行（Node 用户）
+
+```bash
+npm i -g @t0ugh-sys/loopagent
+loopagent tools
+loopagent code --goal "inspect README then finish" --workspace . --provider mock --model mock-v3 --output json
+```
+
+说明：
+
+- 首次运行会自动检测 Python 3.11+、创建本地虚拟环境并安装当前包
+- 可通过 `LOOPAGENT_PYTHON` 指定 Python 可执行文件
+
 运行 CLI：
 
 ```bash
