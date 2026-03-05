@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import urllib.error
 import urllib.request
 from typing import Callable
 
@@ -49,6 +50,7 @@ def _openai_compatible_invoke_factory(
     temperature: float,
     timeout_s: float,
     wire_api: str,
+    debug: bool,
 ) -> InvokeFn:
     base = base_url.rstrip('/')
     if wire_api == 'responses':
@@ -75,8 +77,18 @@ def _openai_compatible_invoke_factory(
             'Authorization': f'Bearer {api_key}',
         }
         request = urllib.request.Request(endpoint, data=body, headers=headers, method='POST')
-        with urllib.request.urlopen(request, timeout=timeout_s) as response:
-            raw = response.read().decode('utf-8')
+        try:
+            with urllib.request.urlopen(request, timeout=timeout_s) as response:
+                raw = response.read().decode('utf-8')
+        except urllib.error.HTTPError as exc:
+            error_body = ''
+            try:
+                error_body = exc.read().decode('utf-8', errors='replace')
+            except Exception:
+                error_body = ''
+            if debug:
+                raise ValueError(f'HTTP {exc.code}: {error_body}') from exc
+            raise ValueError(f'HTTP {exc.code}: request failed (enable --provider-debug for details)') from exc
         data = json.loads(raw)
         if wire_api == 'responses':
             output_text = data.get('output_text')
@@ -139,6 +151,7 @@ def build_invoke_from_args(args: argparse.Namespace, *, mode: str = 'json_loop')
             raise ValueError(f'api key is missing: env {api_key_env}')
         temperature = float(getattr(args, 'temperature', 0.2))
         timeout_s = float(getattr(args, 'provider_timeout_s', 60.0))
+        debug = bool(getattr(args, 'provider_debug', False))
         return _openai_compatible_invoke_factory(
             base_url=base_url,
             api_key=api_key,
@@ -146,6 +159,7 @@ def build_invoke_from_args(args: argparse.Namespace, *, mode: str = 'json_loop')
             temperature=temperature,
             timeout_s=timeout_s,
             wire_api=wire_api,
+            debug=debug,
         )
 
     raise ValueError(f'unknown provider: {provider}')

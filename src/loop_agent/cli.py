@@ -32,6 +32,7 @@ def build_parser(registry: StepRegistry) -> argparse.ArgumentParser:
     parser.add_argument('--api-key-env', default='OPENAI_API_KEY')
     parser.add_argument('--temperature', type=float, default=0.2)
     parser.add_argument('--provider-timeout-s', type=float, default=60.0)
+    parser.add_argument('--provider-debug', action='store_true', help='打印 provider 失败响应体（调试用）')
     parser.add_argument('--history-window', type=int, default=3, help='JSON 策略下带入历史输出条数')
     parser.add_argument('--max-steps', type=int, default=20)
     parser.add_argument('--timeout-s', type=float, default=60.0)

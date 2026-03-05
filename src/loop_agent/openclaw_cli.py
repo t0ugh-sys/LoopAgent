@@ -95,6 +95,7 @@ def build_parser() -> argparse.ArgumentParser:
     code.add_argument('--api-key-env', default='OPENAI_API_KEY')
     code.add_argument('--temperature', type=float, default=0.2)
     code.add_argument('--provider-timeout-s', type=float, default=60.0)
+    code.add_argument('--provider-debug', action='store_true')
     code.add_argument('--max-steps', type=int, default=12)
     code.add_argument('--timeout-s', type=float, default=120.0)
     code.add_argument('--output', choices=['text', 'json'], default='text')
