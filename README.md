@@ -105,6 +105,12 @@ set OPENAI_API_KEY=sk-xxx
 python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses
 ```
 
+若网关需要额外头（例如租户路由）：
+
+```bash
+python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --provider-header "x-tenant:my-team" --provider-header "x-trace-id:demo-1"
+```
+
 OpenClaw-style `code` 子命令同样支持 provider/model 切换：
 
 ```bash

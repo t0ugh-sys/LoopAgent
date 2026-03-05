@@ -51,6 +51,7 @@ def _openai_compatible_invoke_factory(
     timeout_s: float,
     wire_api: str,
     debug: bool,
+    extra_headers: dict[str, str],
 ) -> InvokeFn:
     base = base_url.rstrip('/')
     if wire_api == 'responses':
@@ -74,8 +75,11 @@ def _openai_compatible_invoke_factory(
         body = json.dumps(payload).encode('utf-8')
         headers = {
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'LoopAgent/0.1 (+https://github.com/t0ugh-sys/LoopAgent)',
             'Authorization': f'Bearer {api_key}',
         }
+        headers.update(extra_headers)
         request = urllib.request.Request(endpoint, data=body, headers=headers, method='POST')
         try:
             with urllib.request.urlopen(request, timeout=timeout_s) as response:
@@ -152,6 +156,7 @@ def build_invoke_from_args(args: argparse.Namespace, *, mode: str = 'json_loop')
         temperature = float(getattr(args, 'temperature', 0.2))
         timeout_s = float(getattr(args, 'provider_timeout_s', 60.0))
         debug = bool(getattr(args, 'provider_debug', False))
+        extra_headers = parse_provider_headers(getattr(args, 'provider_header', []))
         return _openai_compatible_invoke_factory(
             base_url=base_url,
             api_key=api_key,
@@ -160,6 +165,21 @@ def build_invoke_from_args(args: argparse.Namespace, *, mode: str = 'json_loop')
             timeout_s=timeout_s,
             wire_api=wire_api,
             debug=debug,
+            extra_headers=extra_headers,
         )
 
     raise ValueError(f'unknown provider: {provider}')
+
+
+def parse_provider_headers(items: list[str]) -> dict[str, str]:
+    headers: dict[str, str] = {}
+    for item in items:
+        if ':' not in item:
+            raise ValueError('provider header must be Key:Value format')
+        key, value = item.split(':', 1)
+        key = key.strip()
+        value = value.strip()
+        if not key:
+            raise ValueError('provider header key must not be empty')
+        headers[key] = value
+    return headers

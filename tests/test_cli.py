@@ -36,6 +36,10 @@ class CliTests(unittest.TestCase):
                 '--wire-api',
                 'responses',
                 '--provider-debug',
+                '--provider-header',
+                'x-foo:bar',
+                '--provider-header',
+                'x-baz:qux',
             ]
         )
         self.assertEqual(args.strategy, 'json_llm')
@@ -43,6 +47,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.model, 'qwen-max')
         self.assertEqual(args.wire_api, 'responses')
         self.assertTrue(args.provider_debug)
+        self.assertEqual(args.provider_header, ['x-foo:bar', 'x-baz:qux'])
 
     def test_should_read_goal_from_utf8_file(self) -> None:
         parser = build_parser(build_default_registry())
