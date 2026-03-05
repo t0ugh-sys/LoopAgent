@@ -40,6 +40,14 @@ class CliTests(unittest.TestCase):
                 'x-foo:bar',
                 '--provider-header',
                 'x-baz:qux',
+                '--fallback-model',
+                'gpt-5-codex',
+                '--max-retries',
+                '3',
+                '--retry-backoff-s',
+                '1.5',
+                '--retry-http-code',
+                '502',
             ]
         )
         self.assertEqual(args.strategy, 'json_llm')
@@ -48,6 +56,10 @@ class CliTests(unittest.TestCase):
         self.assertEqual(args.wire_api, 'responses')
         self.assertTrue(args.provider_debug)
         self.assertEqual(args.provider_header, ['x-foo:bar', 'x-baz:qux'])
+        self.assertEqual(args.fallback_model, ['gpt-5-codex'])
+        self.assertEqual(args.max_retries, 3)
+        self.assertEqual(args.retry_backoff_s, 1.5)
+        self.assertEqual(args.retry_http_code, [502])
 
     def test_should_read_goal_from_utf8_file(self) -> None:
         parser = build_parser(build_default_registry())

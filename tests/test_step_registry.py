@@ -37,6 +37,12 @@ class StepRegistryTests(unittest.TestCase):
             api_key_env='OPENAI_API_KEY',
             temperature=0.2,
             provider_timeout_s=30.0,
+            fallback_model=[],
+            max_retries=2,
+            retry_backoff_s=1.0,
+            retry_http_code=[],
+            provider_header=[],
+            provider_debug=False,
         )
         step, state = registry.create('json_llm', args)
         self.assertIsNotNone(step)

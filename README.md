@@ -111,6 +111,12 @@ python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --
 python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --provider-header "x-tenant:my-team" --provider-header "x-trace-id:demo-1"
 ```
 
+网关不稳定时可开启重试与模型回退：
+
+```bash
+python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --fallback-model gpt-5-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --max-retries 3 --retry-backoff-s 1.0 --retry-http-code 502 --retry-http-code 503
+```
+
 OpenClaw-style `code` 子命令同样支持 provider/model 切换：
 
 ```bash

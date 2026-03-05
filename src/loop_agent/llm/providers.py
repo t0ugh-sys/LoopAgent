@@ -3,11 +3,21 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import time
 import urllib.error
 import urllib.request
 from typing import Callable
 
 InvokeFn = Callable[[str], str]
+
+DEFAULT_RETRY_HTTP_CODES = {502, 503, 504, 524}
+
+
+class ProviderHttpError(Exception):
+    def __init__(self, status_code: int, body: str) -> None:
+        super().__init__(f'HTTP {status_code}: {body}')
+        self.status_code = status_code
+        self.body = body
 
 
 def _mock_invoke_factory(model: str, *, mode: str) -> InvokeFn:
@@ -47,11 +57,15 @@ def _openai_compatible_invoke_factory(
     base_url: str,
     api_key: str,
     model: str,
+    fallback_models: list[str],
     temperature: float,
     timeout_s: float,
     wire_api: str,
     debug: bool,
     extra_headers: dict[str, str],
+    max_retries: int,
+    retry_backoff_s: float,
+    retry_http_codes: set[int],
 ) -> InvokeFn:
     base = base_url.rstrip('/')
     if wire_api == 'responses':
@@ -59,19 +73,13 @@ def _openai_compatible_invoke_factory(
     else:
         endpoint = base + '/chat/completions'
 
-    def invoke(prompt: str) -> str:
+    models_to_try = [model, *fallback_models]
+
+    def _request_once(prompt: str, current_model: str) -> dict:
         if wire_api == 'responses':
-            payload = {
-                'model': model,
-                'input': prompt,
-                'temperature': temperature,
-            }
+            payload = {'model': current_model, 'input': prompt, 'temperature': temperature}
         else:
-            payload = {
-                'model': model,
-                'messages': [{'role': 'user', 'content': prompt}],
-                'temperature': temperature,
-            }
+            payload = {'model': current_model, 'messages': [{'role': 'user', 'content': prompt}], 'temperature': temperature}
         body = json.dumps(payload).encode('utf-8')
         headers = {
             'Content-Type': 'application/json',
@@ -90,47 +98,73 @@ def _openai_compatible_invoke_factory(
                 error_body = exc.read().decode('utf-8', errors='replace')
             except Exception:
                 error_body = ''
-            if debug:
-                raise ValueError(f'HTTP {exc.code}: {error_body}') from exc
-            raise ValueError(f'HTTP {exc.code}: request failed (enable --provider-debug for details)') from exc
-        data = json.loads(raw)
-        if wire_api == 'responses':
-            output_text = data.get('output_text')
-            if isinstance(output_text, str) and output_text:
-                return output_text
-            output = data.get('output', [])
-            if isinstance(output, list):
-                fragments: list[str] = []
-                for item in output:
-                    if not isinstance(item, dict):
-                        continue
-                    content = item.get('content', [])
-                    if not isinstance(content, list):
-                        continue
-                    for piece in content:
-                        if not isinstance(piece, dict):
-                            continue
-                        text = piece.get('text')
-                        if isinstance(text, str):
-                            fragments.append(text)
-                merged = ''.join(fragments).strip()
-                if merged:
-                    return merged
-            raise ValueError('invalid responses output: no output_text/content')
+            raise ProviderHttpError(status_code=int(exc.code), body=error_body) from exc
+        return json.loads(raw)
 
-        choices = data.get('choices', [])
-        if not isinstance(choices, list) or not choices:
-            raise ValueError('invalid openai-compatible response: choices missing')
-        first = choices[0]
-        if not isinstance(first, dict):
-            raise ValueError('invalid openai-compatible response: choice item invalid')
-        message = first.get('message', {})
-        if not isinstance(message, dict):
-            raise ValueError('invalid openai-compatible response: message invalid')
-        content = message.get('content', '')
-        if not isinstance(content, str):
-            raise ValueError('invalid openai-compatible response: content invalid')
-        return content
+    def invoke(prompt: str) -> str:
+        last_http_error: ProviderHttpError | None = None
+
+        for current_model in models_to_try:
+            for attempt in range(max_retries + 1):
+                try:
+                    data = _request_once(prompt, current_model)
+                    break
+                except ProviderHttpError as exc:
+                    last_http_error = exc
+                    should_retry = exc.status_code in retry_http_codes and attempt < max_retries
+                    if should_retry:
+                        time.sleep(retry_backoff_s * (2 ** attempt))
+                        continue
+                    data = None
+                    break
+            if data is None:
+                continue
+
+            if wire_api == 'responses':
+                output_text = data.get('output_text')
+                if isinstance(output_text, str) and output_text:
+                    return output_text
+                output = data.get('output', [])
+                if isinstance(output, list):
+                    fragments: list[str] = []
+                    for item in output:
+                        if not isinstance(item, dict):
+                            continue
+                        content = item.get('content', [])
+                        if not isinstance(content, list):
+                            continue
+                        for piece in content:
+                            if not isinstance(piece, dict):
+                                continue
+                            text = piece.get('text')
+                            if isinstance(text, str):
+                                fragments.append(text)
+                    merged = ''.join(fragments).strip()
+                    if merged:
+                        return merged
+                raise ValueError('invalid responses output: no output_text/content')
+
+            choices = data.get('choices', [])
+            if not isinstance(choices, list) or not choices:
+                raise ValueError('invalid openai-compatible response: choices missing')
+            first = choices[0]
+            if not isinstance(first, dict):
+                raise ValueError('invalid openai-compatible response: choice item invalid')
+            message = first.get('message', {})
+            if not isinstance(message, dict):
+                raise ValueError('invalid openai-compatible response: message invalid')
+            content = message.get('content', '')
+            if not isinstance(content, str):
+                raise ValueError('invalid openai-compatible response: content invalid')
+            return content
+
+        if last_http_error is not None:
+            if debug:
+                raise ValueError(f'HTTP {last_http_error.status_code}: {last_http_error.body}')
+            raise ValueError(
+                f'HTTP {last_http_error.status_code}: request failed (enable --provider-debug for details)'
+            )
+        raise ValueError('provider request failed without response')
 
     return invoke
 
@@ -146,6 +180,7 @@ def build_invoke_from_args(args: argparse.Namespace, *, mode: str = 'json_loop')
         base_url = str(getattr(args, 'base_url', '')).strip()
         if not base_url:
             raise ValueError('base_url is required for openai_compatible provider')
+        fallback_models = [item.strip() for item in getattr(args, 'fallback_model', []) if str(item).strip()]
         wire_api = str(getattr(args, 'wire_api', 'chat_completions')).strip()
         if wire_api not in {'chat_completions', 'responses'}:
             raise ValueError('wire_api must be one of: chat_completions,responses')
@@ -157,15 +192,24 @@ def build_invoke_from_args(args: argparse.Namespace, *, mode: str = 'json_loop')
         timeout_s = float(getattr(args, 'provider_timeout_s', 60.0))
         debug = bool(getattr(args, 'provider_debug', False))
         extra_headers = parse_provider_headers(getattr(args, 'provider_header', []))
+        max_retries = int(getattr(args, 'max_retries', 2))
+        retry_backoff_s = float(getattr(args, 'retry_backoff_s', 1.0))
+        retry_http_codes = set(int(item) for item in getattr(args, 'retry_http_code', []))
+        if not retry_http_codes:
+            retry_http_codes = set(DEFAULT_RETRY_HTTP_CODES)
         return _openai_compatible_invoke_factory(
             base_url=base_url,
             api_key=api_key,
             model=model,
+            fallback_models=fallback_models,
             temperature=temperature,
             timeout_s=timeout_s,
             wire_api=wire_api,
             debug=debug,
             extra_headers=extra_headers,
+            max_retries=max_retries,
+            retry_backoff_s=retry_backoff_s,
+            retry_http_codes=retry_http_codes,
         )
 
     raise ValueError(f'unknown provider: {provider}')

@@ -96,6 +96,10 @@ def build_parser() -> argparse.ArgumentParser:
     code.add_argument('--temperature', type=float, default=0.2)
     code.add_argument('--provider-timeout-s', type=float, default=60.0)
     code.add_argument('--provider-debug', action='store_true')
+    code.add_argument('--fallback-model', action='append', default=[])
+    code.add_argument('--max-retries', type=int, default=2)
+    code.add_argument('--retry-backoff-s', type=float, default=1.0)
+    code.add_argument('--retry-http-code', action='append', type=int, default=[])
     code.add_argument(
         '--provider-header',
         action='append',

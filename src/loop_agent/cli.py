@@ -33,6 +33,10 @@ def build_parser(registry: StepRegistry) -> argparse.ArgumentParser:
     parser.add_argument('--temperature', type=float, default=0.2)
     parser.add_argument('--provider-timeout-s', type=float, default=60.0)
     parser.add_argument('--provider-debug', action='store_true', help='打印 provider 失败响应体（调试用）')
+    parser.add_argument('--fallback-model', action='append', default=[], help='provider 主模型失败时回退模型（可重复）')
+    parser.add_argument('--max-retries', type=int, default=2, help='provider 重试次数')
+    parser.add_argument('--retry-backoff-s', type=float, default=1.0, help='provider 重试退避秒数')
+    parser.add_argument('--retry-http-code', action='append', type=int, default=[], help='触发重试的 HTTP 状态码（可重复）')
     parser.add_argument(
         '--provider-header',
         action='append',
