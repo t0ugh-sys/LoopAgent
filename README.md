@@ -2,6 +2,18 @@
 
 这是一个可扩展的“循环执行 Agent”项目骨架：核心库只使用 Python 标准库，支持持续迭代执行，直到满足 `done=True` 或命中停止条件（超时/最大步数/外部取消）。
 
+## Python 版本要求（必读）
+
+- Requires Python 3.11+
+- 若使用 Python 3.8/3.9/3.10，可能在导入阶段因 `dict[str, Any]` 等类型语法直接报错（这不是业务逻辑错误）
+
+最短可执行命令（不依赖 conda）：
+
+```bash
+python -m pip install -e .
+python -m unittest -v
+```
+
 核心引擎在 `step` 抛异常时不会让进程直接崩溃，而是返回 `stop_reason=step_error` 并附带错误信息，便于上层统一治理。
 核心引擎支持可选 `observer` 事件回调，便于接日志、埋点和监控系统。
 
