@@ -208,10 +208,40 @@ def search_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
 
 
 def run_command_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
+    """Run a command in the workspace. 
+    
+    For security, prefer using 'cmd' (list) over 'command' (string with shell=True).
+    If using 'command' string, ensure input is validated to prevent injection.
+    """
     command = str(args.get('command', '')).strip()
+    cmd_list = args.get('cmd')  # List of args for shell=False mode
     call_id = str(args.get('id', 'run_command'))
+    
+    # Determine if we're using safe mode (list of args) or legacy mode (string with shell)
+    if cmd_list is not None and isinstance(cmd_list, list):
+        # Safe mode: use list of arguments, shell=False
+        try:
+            proc = subprocess.run(
+                cmd_list,
+                cwd=str(context.workspace_root),
+                shell=False,
+                check=False,
+                text=True,
+                capture_output=True,
+                encoding='utf-8',
+                errors='replace',
+            )
+            merged = (proc.stdout or '') + (proc.stderr or '')
+            ok = proc.returncode == 0
+            return ToolResult(id=call_id, ok=ok, output=merged.strip(), error=None if ok else f'exit={proc.returncode}')
+        except FileNotFoundError as exc:
+            return ToolResult(id=call_id, ok=False, output='', error=f'command not found: {exc.filename}')
+        except Exception as exc:
+            return ToolResult(id=call_id, ok=False, output='', error=str(exc))
+    
+    # Legacy mode: string command with shell=True (DEPRECATED - security risk)
     if not command:
-        return ToolResult(id=call_id, ok=False, output='', error='command is required')
+        return ToolResult(id=call_id, ok=False, output='', error='command or cmd is required')
 
     try:
         proc = subprocess.run(
@@ -301,7 +331,7 @@ def fetch_url_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
         text = re.sub(r' +', ' ', text)
         
         # Limit output size
-        max_chars = int(args.get('max_chars', 5000))
+        max_chars = int(str(args.get('max_chars', '5000')))
         if len(text) > max_chars:
             text = text[:max_chars] + f'\n\n... (truncated, total {len(text)} chars)'
         
