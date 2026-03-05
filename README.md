@@ -119,6 +119,20 @@ python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --
 python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --fallback-model gpt-5-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --max-retries 3 --retry-backoff-s 1.0 --retry-http-code 502 --retry-http-code 503
 ```
 
+Anthropic Claude provider 示例：
+
+```bash
+set ANTHROPIC_API_KEY=sk-ant-xxx
+python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider anthropic --model claude-3-opus-20240229
+```
+
+Google Gemini provider 示例：
+
+```bash
+set GEMINI_API_KEY=xxx
+python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider gemini --model gemini-pro
+```
+
 `code` 子命令同样支持 provider/model 切换：
 
 ```bash
