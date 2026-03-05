@@ -36,6 +36,8 @@ class StepContext(Generic[StateT]):
     started_at_s: float
     now_s: float
     history: tuple[str, ...]
+    state_summary: dict[str, Any] = field(default_factory=dict)
+    last_steps: tuple[str, ...] = field(default_factory=tuple)
 
     @property
     def elapsed_s(self) -> float:
@@ -65,6 +67,15 @@ class RunResult(Generic[StateT]):
 StepFn = Callable[[StepContext[StateT]], StepResult[StateT]]
 CancelFn = Callable[[], bool]
 ObserverFn = Callable[[str, dict[str, Any]], None]
+
+
+@dataclass(frozen=True)
+class ContextSnapshot:
+    state_summary: dict[str, Any] = field(default_factory=dict)
+    last_steps: tuple[str, ...] = field(default_factory=tuple)
+
+
+ContextProviderFn = Callable[[], ContextSnapshot]
 
 
 def monotonic_s() -> float:

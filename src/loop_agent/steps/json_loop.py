@@ -36,7 +36,17 @@ def make_json_decision_step(invoke: InvokeFn, *, history_window: int = 3) -> Ste
         raise ValueError('history_window must be >= 0')
 
     def step(context: StepContext[JsonLoopState]) -> StepResult[JsonLoopState]:
-        prompt = build_json_loop_prompt(goal=context.goal, history=context.history, history_window=history_window)
+        if context.last_steps:
+            history = context.last_steps
+        else:
+            history = context.history
+        prompt = build_json_loop_prompt(goal=context.goal, history=history, history_window=history_window)
+        if context.state_summary:
+            prompt = (
+                prompt
+                + '\n\n状态摘要（必须优先遵守）：\n'
+                + str(context.state_summary)
+            )
         raw = invoke(prompt)
         decision = parse_json_decision(raw)
         if decision is None:
@@ -49,4 +59,3 @@ def make_json_decision_step(invoke: InvokeFn, *, history_window: int = 3) -> Ste
         )
 
     return step
-

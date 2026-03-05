@@ -40,10 +40,24 @@ class CliTests(unittest.TestCase):
 
     def test_should_parse_observer_and_exit_options(self) -> None:
         parser = build_parser(build_default_registry())
-        args = parser.parse_args(['--goal', 'x', '--observer-file', 'events.jsonl', '--exit-on-failure'])
+        args = parser.parse_args(
+            [
+                '--goal',
+                'x',
+                '--observer-file',
+                'events.jsonl',
+                '--exit-on-failure',
+                '--memory-dir',
+                'memory',
+                '--run-id',
+                'r1',
+            ]
+        )
         self.assertEqual(args.observer_file, 'events.jsonl')
         self.assertTrue(args.exit_on_failure)
         self.assertTrue(args.record_run)
+        self.assertEqual(args.memory_dir, 'memory')
+        self.assertEqual(args.run_id, 'r1')
 
     def test_should_reject_empty_goal(self) -> None:
         args = argparse.Namespace(goal='   ', goal_file=None)
@@ -66,6 +80,9 @@ class CliTests(unittest.TestCase):
 
     def test_should_return_nonzero_when_exit_on_failure_and_not_done(self) -> None:
         parser = build_parser(build_default_registry())
+        tmp_dir = Path('tests/.tmp') / f'run-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        memory_dir = tmp_dir / 'memory'
         args = parser.parse_args(
             [
                 '--goal',
@@ -77,25 +94,55 @@ class CliTests(unittest.TestCase):
                 '--exit-on-failure',
                 '--output',
                 'json',
+                '--memory-dir',
+                str(memory_dir),
+                '--run-id',
+                'r1',
             ]
         )
-        rendered, exit_code = execute(args, build_default_registry())
-        self.assertEqual(exit_code, 1)
-        payload = json.loads(rendered)
-        self.assertEqual(payload['stop_reason'], 'max_steps')
+        try:
+            rendered, exit_code = execute(args, build_default_registry())
+            self.assertEqual(exit_code, 1)
+            payload = json.loads(rendered)
+            self.assertEqual(payload['stop_reason'], 'max_steps')
+            self.assertIn('memory_state', payload)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def test_should_return_zero_when_not_done_but_exit_not_required(self) -> None:
         parser = build_parser(build_default_registry())
-        args = parser.parse_args(['--goal', 'x', '--strategy', 'json_stub', '--max-steps', '1'])
-        _, exit_code = execute(args, build_default_registry())
-        self.assertEqual(exit_code, 0)
+        tmp_dir = Path('tests/.tmp') / f'run-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        memory_dir = tmp_dir / 'memory'
+        args = parser.parse_args(
+            ['--goal', 'x', '--strategy', 'json_stub', '--max-steps', '1', '--memory-dir', str(memory_dir)]
+        )
+        try:
+            _, exit_code = execute(args, build_default_registry())
+            self.assertEqual(exit_code, 0)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def test_should_create_run_directory_by_default(self) -> None:
         parser = build_parser(build_default_registry())
         tmp_dir = Path('tests/.tmp') / f'run-{uuid.uuid4().hex}'
         tmp_dir.mkdir(parents=True, exist_ok=True)
+        memory_dir = tmp_dir / 'memory'
         try:
-            args = parser.parse_args(['--goal', 'x', '--runs-dir', str(tmp_dir), '--output', 'json'])
+            args = parser.parse_args(
+                [
+                    '--goal',
+                    'x',
+                    '--runs-dir',
+                    str(tmp_dir),
+                    '--output',
+                    'json',
+                    '--memory-dir',
+                    str(memory_dir),
+                    '--run-id',
+                    'r2',
+                ]
+            )
             rendered, exit_code = execute(args, build_default_registry())
             self.assertEqual(exit_code, 0)
             payload = json.loads(rendered)
@@ -104,6 +151,9 @@ class CliTests(unittest.TestCase):
             self.assertTrue(Path(run_dir).exists())
             self.assertTrue((Path(run_dir) / 'events.jsonl').exists())
             self.assertTrue((Path(run_dir) / 'summary.json').exists())
+            self.assertTrue((memory_dir / 'r2' / 'events.jsonl').exists())
+            self.assertTrue((memory_dir / 'r2' / 'state.json').exists())
+            self.assertTrue((memory_dir / 'r2' / 'summary.json').exists())
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -111,13 +161,30 @@ class CliTests(unittest.TestCase):
         parser = build_parser(build_default_registry())
         tmp_dir = Path('tests/.tmp') / f'run-{uuid.uuid4().hex}'
         tmp_dir.mkdir(parents=True, exist_ok=True)
+        memory_dir = tmp_dir / 'memory'
         try:
-            args = parser.parse_args(['--goal', 'x', '--runs-dir', str(tmp_dir), '--no-record-run', '--output', 'json'])
+            args = parser.parse_args(
+                [
+                    '--goal',
+                    'x',
+                    '--runs-dir',
+                    str(tmp_dir),
+                    '--no-record-run',
+                    '--output',
+                    'json',
+                    '--memory-dir',
+                    str(memory_dir),
+                    '--run-id',
+                    'r3',
+                ]
+            )
             rendered, exit_code = execute(args, build_default_registry())
             self.assertEqual(exit_code, 0)
             payload = json.loads(rendered)
             self.assertNotIn('run_dir', payload)
-            self.assertEqual(list(Path(tmp_dir).iterdir()), [])
+            self.assertTrue((memory_dir / 'r3' / 'events.jsonl').exists())
+            self.assertTrue((memory_dir / 'r3' / 'state.json').exists())
+            self.assertTrue((memory_dir / 'r3' / 'summary.json').exists())
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 

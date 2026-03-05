@@ -7,7 +7,7 @@ from dataclasses import dataclass
 import _bootstrap  # noqa: F401
 
 from loop_agent.core.agent import LoopAgent
-from loop_agent.core.types import StepContext, StepResult, StopConfig, StopReason
+from loop_agent.core.types import ContextSnapshot, StepContext, StepResult, StopConfig, StopReason
 
 
 @dataclass(frozen=True)
@@ -105,6 +105,24 @@ class LoopAgentTests(unittest.TestCase):
 
         self.assertTrue(result.done)
         self.assertEqual(events, ['step_started', 'step_succeeded', 'stopped'])
+
+    def test_should_inject_context_snapshot(self) -> None:
+        captured: dict[str, object] = {}
+
+        def step(context: StepContext[_State]) -> StepResult[_State]:
+            captured['summary'] = context.state_summary
+            captured['last_steps'] = context.last_steps
+            return StepResult(output='ok', state=context.state, done=True)
+
+        def context_provider() -> ContextSnapshot:
+            return ContextSnapshot(state_summary={'goal': 'x'}, last_steps=('a', 'b'))
+
+        agent = LoopAgent(step=step)
+        result = agent.run(goal='x', initial_state=_State(), context_provider=context_provider)
+
+        self.assertTrue(result.done)
+        self.assertEqual(captured['summary'], {'goal': 'x'})
+        self.assertEqual(captured['last_steps'], ('a', 'b'))
 
 
 if __name__ == '__main__':

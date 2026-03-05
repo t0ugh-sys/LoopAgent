@@ -93,6 +93,26 @@ conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --go
 
 可通过 `--no-record-run` 关闭，或通过 `--runs-dir` 修改记录目录。
 
+## 上下文记忆（默认开启）
+
+- 默认记忆根目录：`.loopagent/runs`
+- 每次运行会落盘到 `.loopagent/runs/<run_id>/`
+- 关键文件：
+- `events.jsonl`：完整事件流（可回放）
+- `state.json`：当前快照（goal、step_index、last_output、history_tail）
+- `summary.json`：长期摘要（goal/current_plan/facts/work_done/open_questions/next_actions）
+
+CLI 参数：
+
+- `--memory-dir`：记忆根目录（默认 `.loopagent/runs`）
+- `--run-id`：指定运行 ID（默认 UTC 时间戳）
+- `--summarize-every`：每 N 个事件更新一次摘要（默认 5）
+
+每一步都会固定注入结构化上下文：
+
+- `state_summary`（长期摘要）
+- `last_steps`（最近 K 步，K 由 `--history-window` 控制）
+
 示例 `goal.txt` 请用 UTF-8 保存，例如内容为：
 
 ```

@@ -13,3 +13,4 @@ dist/
 goal.txt
 runs/
 AGENTS.md
+.loopagent/

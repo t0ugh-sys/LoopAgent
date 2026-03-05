@@ -3,14 +3,20 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from .core.agent import LoopAgent
-from .core.serialization import run_result_to_dict, run_result_to_json
-from .core.types import ObserverFn, RunResult, StopConfig, StopReason
+from .core.serialization import run_result_to_dict
+from .core.types import ContextSnapshot, ObserverFn, RunResult, StopConfig, StopReason
+from .memory.jsonl_store import JsonlMemoryStore
 from .run_recorder import RunRecorder
 from .steps.registry import StepRegistry, build_default_registry
+
+
+def _default_run_id() -> str:
+    return datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
 
 
 def build_parser(registry: StepRegistry) -> argparse.ArgumentParser:
@@ -26,6 +32,9 @@ def build_parser(registry: StepRegistry) -> argparse.ArgumentParser:
     parser.add_argument('--include-history', action='store_true', help='JSON 输出时是否包含 history')
     parser.add_argument('--observer-file', help='将事件回调按 JSONL 写入指定文件')
     parser.add_argument('--exit-on-failure', action='store_true', help='当未完成时返回非零退出码')
+    parser.add_argument('--memory-dir', default='.loopagent/runs', help='记忆目录根路径')
+    parser.add_argument('--run-id', help='本次运行 ID（默认使用 UTC 时间戳）')
+    parser.add_argument('--summarize-every', type=int, default=5, help='每 N 个事件更新一次 state_summary')
     parser.add_argument('--record-run', action='store_true', default=True, help='记录本次运行到 runs 目录（默认开启）')
     parser.add_argument('--no-record-run', action='store_false', dest='record_run', help='关闭本次运行记录')
     parser.add_argument('--runs-dir', default='runs', help='运行记录根目录')
@@ -73,6 +82,11 @@ def merge_observers(observers: list[ObserverFn]) -> ObserverFn | None:
 def execute(args: argparse.Namespace, registry: StepRegistry) -> tuple[str, int]:
     goal = resolve_goal(args)
     step, initial_state = registry.create(args.strategy, args)
+    run_id = args.run_id or _default_run_id()
+    memory_run_dir = Path(args.memory_dir) / run_id
+    memory_store = JsonlMemoryStore(memory_dir=memory_run_dir, summarize_every=args.summarize_every)
+    memory_store.on_event('run_started', {'goal': goal, 'strategy': args.strategy, 'facts': []})
+
     recorder: RunRecorder | None = None
     observers: list[ObserverFn] = []
     if args.observer_file:
@@ -80,19 +94,35 @@ def execute(args: argparse.Namespace, registry: StepRegistry) -> tuple[str, int]
     if args.record_run:
         recorder = RunRecorder.create(base_dir=Path(args.runs_dir))
         observers.append(recorder.write_event)
+    observers.append(memory_store.on_event)
     observer = merge_observers(observers)
+    def context_provider() -> ContextSnapshot:
+        memory_context = memory_store.load_context(goal=goal, last_k_steps=args.history_window)
+        return ContextSnapshot(state_summary=memory_context.state_summary, last_steps=memory_context.last_steps)
 
     agent = LoopAgent(step=step, stop=StopConfig(max_steps=args.max_steps, max_elapsed_s=args.timeout_s))
-    result = agent.run(goal=goal, initial_state=initial_state, observer=observer)
+    result = agent.run(goal=goal, initial_state=initial_state, observer=observer, context_provider=context_provider)
+    memory_store.on_event(
+        'run_finished',
+        {'done': result.done, 'stop_reason': result.stop_reason.value, 'steps': result.steps},
+    )
     if recorder is not None:
         recorder.write_summary(run_result_to_dict(result, include_history=True))
 
+    memory_context = memory_store.load_context(goal=goal, last_k_steps=args.history_window)
     if args.output == 'json':
         if recorder is None:
-            rendered = run_result_to_json(result, include_history=args.include_history)
+            payload = run_result_to_dict(result, include_history=args.include_history)
+            payload['memory_state'] = memory_context.state_summary
+            payload['memory_last_steps'] = list(memory_context.last_steps)
+            payload['memory_run_dir'] = str(memory_run_dir)
+            rendered = json.dumps(payload, ensure_ascii=False)
         else:
             payload = run_result_to_dict(result, include_history=args.include_history)
             payload['run_dir'] = str(recorder.run_dir)
+            payload['memory_state'] = memory_context.state_summary
+            payload['memory_last_steps'] = list(memory_context.last_steps)
+            payload['memory_run_dir'] = str(memory_run_dir)
             rendered = json.dumps(payload, ensure_ascii=False)
     else:
         lines = [
@@ -100,6 +130,8 @@ def execute(args: argparse.Namespace, registry: StepRegistry) -> tuple[str, int]
             f'stop_reason: {result.stop_reason.value}',
             f'steps: {result.steps}',
             f'final_output: {result.final_output}',
+            f'memory_summary_steps: {memory_context.state_summary.get("steps", 0)}',
+            f'memory_run_dir: {memory_run_dir}',
         ]
         if recorder is not None:
             lines.append(f'run_dir: {recorder.run_dir}')

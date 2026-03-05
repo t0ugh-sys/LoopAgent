@@ -3,7 +3,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Generic, TypeVar
 
-from .types import CancelFn, ObserverFn, RunResult, StepContext, StepFn, StepResult, StopConfig, StopReason, monotonic_s
+from .types import (
+    CancelFn,
+    ContextProviderFn,
+    ContextSnapshot,
+    ObserverFn,
+    RunResult,
+    StepContext,
+    StepFn,
+    StepResult,
+    StopConfig,
+    StopReason,
+    monotonic_s,
+)
 
 StateT = TypeVar('StateT')
 
@@ -20,6 +32,7 @@ class LoopAgent(Generic[StateT]):
         initial_state: StateT,
         is_cancelled: CancelFn | None = None,
         observer: ObserverFn | None = None,
+        context_provider: ContextProviderFn | None = None,
     ) -> RunResult[StateT]:
         self.stop.validate()
         if not goal.strip():
@@ -68,6 +81,7 @@ class LoopAgent(Generic[StateT]):
                 emit('stopped', {'reason': run_result.stop_reason.value, 'step': run_result.steps})
                 return run_result
 
+            snapshot = context_provider() if context_provider else ContextSnapshot()
             context = StepContext(
                 goal=goal,
                 state=state,
@@ -75,8 +89,18 @@ class LoopAgent(Generic[StateT]):
                 started_at_s=started_at_s,
                 now_s=now_s,
                 history=tuple(history),
+                state_summary=snapshot.state_summary,
+                last_steps=snapshot.last_steps,
             )
-            emit('step_started', {'step': step_index, 'elapsed_s': elapsed_s})
+            emit(
+                'step_started',
+                {
+                    'step': step_index,
+                    'elapsed_s': elapsed_s,
+                    'state_summary': snapshot.state_summary,
+                    'last_steps': list(snapshot.last_steps),
+                },
+            )
             try:
                 result: StepResult[StateT] = self.step(context)
             except Exception as exc:
@@ -98,7 +122,14 @@ class LoopAgent(Generic[StateT]):
             last_output = result.output
             state = result.state
             history.append(result.output)
-            emit('step_succeeded', {'step': step_index, 'done': result.done})
+            emit(
+                'step_succeeded',
+                {
+                    'step': step_index,
+                    'done': result.done,
+                    'output': result.output,
+                },
+            )
 
             if result.done:
                 done_elapsed_s = monotonic_s() - started_at_s
