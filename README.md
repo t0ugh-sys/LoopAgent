@@ -3,6 +3,7 @@
 这是一个可扩展的“循环执行 Agent”项目骨架：核心库只使用 Python 标准库，支持持续迭代执行，直到满足 `done=True` 或命中停止条件（超时/最大步数/外部取消）。
 
 核心引擎在 `step` 抛异常时不会让进程直接崩溃，而是返回 `stop_reason=step_error` 并附带错误信息，便于上层统一治理。
+核心引擎支持可选 `observer` 事件回调，便于接日志、埋点和监控系统。
 
 ## 结构
 
@@ -38,6 +39,13 @@ $env:PYTHONPATH="src"
 conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --strategy json_stub --history-window 2
 ```
 
+机器可读输出（便于 CI 或平台接入）：
+
+```powershell
+$env:PYTHONPATH="src"
+conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --output json --include-history
+```
+
 示例 `goal.txt` 请用 UTF-8 保存，例如内容为：
 
 ```
@@ -53,7 +61,7 @@ conda --no-plugins run --no-capture-output -n base python .\examples\json_loop_s
 
 ## 推荐用法（安装为包）
 
-在 CI/企业项目里更推荐先安装为可编辑包，再运行测试/命令：
+在 CI/项目里更推荐先安装为可编辑包，再运行测试/命令：
 
 ```powershell
 conda --no-plugins run -n base python -m pip install -e .

@@ -4,6 +4,7 @@ import argparse
 import sys
 
 from .core.agent import LoopAgent
+from .core.serialization import run_result_to_json
 from .core.types import StopConfig
 from .steps.registry import StepRegistry, build_default_registry
 
@@ -17,6 +18,8 @@ def build_parser(registry: StepRegistry) -> argparse.ArgumentParser:
     parser.add_argument('--history-window', type=int, default=3, help='JSON 策略下带入历史输出条数')
     parser.add_argument('--max-steps', type=int, default=20)
     parser.add_argument('--timeout-s', type=float, default=60.0)
+    parser.add_argument('--output', choices=['text', 'json'], default='text')
+    parser.add_argument('--include-history', action='store_true', help='JSON 输出时是否包含 history')
     return parser
 
 
@@ -44,6 +47,10 @@ def main() -> None:
 
     agent = LoopAgent(step=step, stop=StopConfig(max_steps=args.max_steps, max_elapsed_s=args.timeout_s))
     result = agent.run(goal=goal, initial_state=initial_state)
+
+    if args.output == 'json':
+        print(run_result_to_json(result, include_history=args.include_history))
+        return
 
     print('done:', result.done)
     print('stop_reason:', result.stop_reason.value)

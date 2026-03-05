@@ -90,6 +90,22 @@ class LoopAgentTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             agent.run(goal='   ', initial_state=_State())
 
+    def test_should_emit_observer_events(self) -> None:
+        def step(context: StepContext[_State]) -> StepResult[_State]:
+            return StepResult(output='ok', state=context.state, done=True)
+
+        events: list[str] = []
+
+        def observer(event: str, payload: dict[str, object]) -> None:
+            events.append(event)
+            self.assertIsInstance(payload, dict)
+
+        agent = LoopAgent(step=step)
+        result = agent.run(goal='x', initial_state=_State(), observer=observer)
+
+        self.assertTrue(result.done)
+        self.assertEqual(events, ['step_started', 'step_succeeded', 'stopped'])
+
 
 if __name__ == '__main__':
     unittest.main()

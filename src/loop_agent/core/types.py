@@ -64,6 +64,7 @@ class RunResult(Generic[StateT]):
 
 StepFn = Callable[[StepContext[StateT]], StepResult[StateT]]
 CancelFn = Callable[[], bool]
+ObserverFn = Callable[[str, dict[str, Any]], None]
 
 
 def monotonic_s() -> float:

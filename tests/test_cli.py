@@ -28,6 +28,12 @@ class CliTests(unittest.TestCase):
         finally:
             os.remove(path)
 
+    def test_should_parse_json_output_options(self) -> None:
+        parser = build_parser(build_default_registry())
+        args = parser.parse_args(['--goal', 'x', '--output', 'json', '--include-history'])
+        self.assertEqual(args.output, 'json')
+        self.assertTrue(args.include_history)
+
     def test_should_reject_empty_goal(self) -> None:
         args = argparse.Namespace(goal='   ', goal_file=None)
         with self.assertRaises(ValueError):
@@ -36,4 +42,3 @@ class CliTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
