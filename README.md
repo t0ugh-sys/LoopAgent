@@ -75,6 +75,12 @@ python -m unittest discover -s tests -p "test_*.py" -v
 python -m loop_agent.cli --goal-file .\goal.txt --strategy demo
 ```
 
+conda 等价命令：
+
+```powershell
+conda --no-plugins run --no-capture-output -n <your_env> python -m loop_agent.cli --goal-file .\goal.txt --strategy demo
+```
+
 内置策略：
 
 - `demo`：固定三轮收敛
@@ -85,6 +91,12 @@ python -m loop_agent.cli --goal-file .\goal.txt --strategy demo
 
 ```powershell
 python -m loop_agent.cli --goal-file .\goal.txt --strategy json_stub --history-window 2
+```
+
+conda 等价命令：
+
+```powershell
+conda --no-plugins run --no-capture-output -n <your_env> python -m loop_agent.cli --goal-file .\goal.txt --strategy json_stub --history-window 2
 ```
 
 切换模型（参数化切换）：
