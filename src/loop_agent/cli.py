@@ -25,7 +25,7 @@ def build_parser(registry: StepRegistry) -> argparse.ArgumentParser:
     group.add_argument('--goal', help='用户目标/需求描述（短文本，尽量避免复杂编码问题）')
     group.add_argument('--goal-file', help='从 UTF-8 文件读取目标（推荐用于中文/长文本）')
     parser.add_argument('--strategy', choices=registry.names(), default='demo')
-    parser.add_argument('--provider', choices=['mock', 'openai_compatible'], default='mock')
+    parser.add_argument('--provider', choices=['mock', 'openai_compatible', 'anthropic', 'gemini'], default='mock')
     parser.add_argument('--model', default='mock-model')
     parser.add_argument('--base-url', default='')
     parser.add_argument('--wire-api', choices=['chat_completions', 'responses'], default='chat_completions')

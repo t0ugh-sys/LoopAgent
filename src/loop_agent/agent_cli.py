@@ -185,7 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
     goal_group.add_argument('--goal')
     goal_group.add_argument('--goal-file')
     code.add_argument('--workspace', default='.')
-    code.add_argument('--provider', choices=['mock', 'openai_compatible'], default='mock')
+    code.add_argument('--provider', choices=['mock', 'openai_compatible', 'anthropic', 'gemini'], default='mock')
     code.add_argument('--model', default='mock-model')
     code.add_argument('--base-url', default='')
     code.add_argument('--wire-api', choices=['chat_completions', 'responses'], default='chat_completions')
