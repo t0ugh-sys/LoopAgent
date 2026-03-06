@@ -30,9 +30,9 @@ PROVIDERS = ['openai_compatible', 'anthropic', 'gemini']
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog='loopagent-chat')
     p.add_argument('--provider', choices=PROVIDERS, default='openai_compatible')
-    p.add_argument('--model', default='gpt-4o-mini')
-    p.add_argument('--base-url', default='https://api.openai.com/v1')
-    p.add_argument('--api-key-env', default='OPENAI_API_KEY')
+    p.add_argument('--model', default='')
+    p.add_argument('--base-url', default='')
+    p.add_argument('--api-key-env', default='')
     p.add_argument('--temperature', type=float, default=0.2)
     p.add_argument('--provider-timeout-s', type=float, default=60.0)
     p.add_argument('--history-limit', type=int, default=30, help='max messages to send as context')
@@ -128,15 +128,35 @@ def run(argv: Optional[list[str]] = None) -> int:
 
     args = build_parser().parse_args(argv)
 
+    provider_defaults = {
+        'openai_compatible': {
+            'model': 'gpt-4o-mini',
+            'base_url': 'https://api.openai.com/v1',
+            'api_key_env': 'OPENAI_API_KEY',
+        },
+        'anthropic': {
+            'model': 'claude-3-5-sonnet-latest',
+            'base_url': '',
+            'api_key_env': 'ANTHROPIC_API_KEY',
+        },
+        'gemini': {
+            'model': 'gemini-1.5-flash',
+            'base_url': '',
+            'api_key_env': 'GEMINI_API_KEY',
+        },
+    }
+
+    defaults = provider_defaults.get(args.provider, provider_defaults['openai_compatible'])
+
     chat_id = args.chat_id.strip() or _utc_run_id()
     chat_root = Path(args.chat_dir)
     chat_dir = _chat_dir(chat_root, chat_id)
 
     cfg = ChatConfig(
         provider=args.provider,
-        model=args.model,
-        base_url=args.base_url,
-        api_key_env=args.api_key_env,
+        model=str(args.model or defaults['model']),
+        base_url=str(args.base_url or defaults['base_url']),
+        api_key_env=str(args.api_key_env or defaults['api_key_env']),
         temperature=float(args.temperature),
         provider_timeout_s=float(args.provider_timeout_s),
         history_limit=int(args.history_limit),
