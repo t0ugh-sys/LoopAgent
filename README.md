@@ -211,3 +211,55 @@ conda --no-plugins run -n base python -m pip install -e .
 conda --no-plugins run --no-capture-output -n base python -m unittest discover -s tests -p "test_*.py" -v
 conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt
 ```
+
+## Skill 系统
+
+LoopAgent 支持可插拔的 Skill 系统，可以动态加载功能模块。
+
+### 内置 Skills
+
+| Skill | 说明 | 依赖 |
+|-------|------|------|
+| `web_search` | 联网搜索、获取网页 | stdlib |
+| `memory` | 分析历史运行、学习模式 | stdlib |
+| `files` | 文件读写、搜索 | stdlib |
+| `commands` | 运行 Shell 命令 | stdlib |
+| `browser` | 浏览器自动化 | playwright |
+
+### 使用 Skill
+
+```bash
+# 加载指定 skills
+python -m loop_agent.agent_cli code --goal "search for info" --skill web_search --skill memory
+
+# 加载所有内置 skills（默认）
+python -m loop_agent.agent_cli code --goal "your goal" --skill all
+```
+
+### 创建自定义 Skill
+
+```python
+from loop_agent.skills import Skill, register_skill
+
+class MySkill(Skill):
+    name = "my_skill"
+    description = "My custom skill"
+    
+    def get_tools(self):
+        def my_tool(args):
+            return ToolResult(id="my_tool", ok=True, output="Hello!", error=None)
+        return {"my_tool": my_tool}
+
+# 注册并使用
+register_skill(MySkill)
+# 或通过 --skill 参数加载
+```
+
+### Skill 工具
+
+- `web_search`: 搜索网络（query 参数）
+- `fetch_url`: 获取网页内容（url 参数）
+- `analyze_memory`: 分析历史运行（memory_dir, goal_filter, limit 参数）
+- `read_file`, `write_file`, `apply_patch`, `search`: 文件操作
+- `run_command`: 执行命令（command 或 cmd 参数）
+- `browser_navigate`, `browser_click`, `browser_fill`, `browser_screenshot`: 浏览器操作
