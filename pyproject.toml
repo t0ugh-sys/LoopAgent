@@ -34,6 +34,11 @@ Homepage = "https://github.com/t0ugh-sys/LoopAgent"
 Repository = "https://github.com/t0ugh-sys/LoopAgent"
 Issues = "https://github.com/t0ugh-sys/LoopAgent/issues"
 
+[project.optional-dependencies]
+tui = [
+  "textual>=0.86.2",
+]
+
 [tool.setuptools]
 package-dir = { "" = "src" }
 

@@ -6,7 +6,7 @@ import os
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Dict, List, Optional, Tuple
 
 from .agent_protocol import render_agent_step_schema
 from .coding_agent import run_coding_agent
@@ -35,10 +35,10 @@ def _build_coding_decider(args: argparse.Namespace):
 
     def decider(
         goal: str,
-        history: tuple[str, ...],
+        history: Tuple[str, ...],
         tool_results,
-        state_summary: dict[str, object],
-        last_steps: tuple[str, ...],
+        state_summary: Dict[str, object],
+        last_steps: Tuple[str, ...],
     ) -> str:
         history_window = max(1, args.history_window)
         prompt = (
@@ -80,7 +80,7 @@ def _load_skills_from_args(args: argparse.Namespace) -> SkillLoader | None:
 
 
 def _build_jsonl_observer(path: str) -> ObserverFn:
-    def observer(event: str, payload: dict[str, Any]) -> None:
+    def observer(event: str, payload: Dict[str, Any]) -> None:
         record = {'event': event, 'payload': payload}
         with open(path, 'a', encoding='utf-8') as file:
             file.write(json.dumps(record, ensure_ascii=False))
@@ -89,12 +89,12 @@ def _build_jsonl_observer(path: str) -> ObserverFn:
     return observer
 
 
-def _merge_observers(observers: list[ObserverFn]) -> ObserverFn | None:
+def _merge_observers(observers: List[ObserverFn]) -> Optional[ObserverFn]:
     active = [item for item in observers if item is not None]
     if not active:
         return None
 
-    def merged(event: str, payload: dict[str, Any]) -> None:
+    def merged(event: str, payload: Dict[str, Any]) -> None:
         for observer in active:
             observer(event, payload)
 
@@ -109,8 +109,8 @@ def _run_code_command(args: argparse.Namespace) -> int:
     memory_store = JsonlMemoryStore(memory_dir=memory_run_dir, summarize_every=args.summarize_every)
     memory_store.on_event('run_started', {'goal': goal, 'strategy': 'coding', 'facts': []})
 
-    recorder: RunRecorder | None = None
-    observers: list[ObserverFn] = []
+    recorder: Optional[RunRecorder] = None
+    observers: List[ObserverFn] = []
     if args.observer_file:
         observers.append(_build_jsonl_observer(args.observer_file))
     if args.record_run:
@@ -246,7 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
     code.add_argument('--summarize-every', type=int, default=5)
     code.add_argument('--record-run', action='store_true', default=True)
     code.add_argument('--no-record-run', action='store_false', dest='record_run')
-    code.add_argument('--runs-dir', default='runs')
+    code.add_argument('--runs-dir', default='.loopagent/runs')
     code.add_argument('--include-history', action='store_true')
     code.add_argument('--output', choices=['text', 'json'], default='text')
     code.add_argument(
