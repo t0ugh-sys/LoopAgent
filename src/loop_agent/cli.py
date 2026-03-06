@@ -55,7 +55,7 @@ def build_parser(registry: StepRegistry) -> argparse.ArgumentParser:
     parser.add_argument('--summarize-every', type=int, default=5, help='每 N 个事件更新一次 state_summary')
     parser.add_argument('--record-run', action='store_true', default=True, help='记录本次运行到 runs 目录（默认开启）')
     parser.add_argument('--no-record-run', action='store_false', dest='record_run', help='关闭本次运行记录')
-    parser.add_argument('--runs-dir', default='runs', help='运行记录根目录')
+    parser.add_argument('--runs-dir', default='.loopagent/runs', help='运行记录根目录')
     return parser
 
 
