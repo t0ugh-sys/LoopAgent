@@ -154,6 +154,9 @@ def run(argv: Optional[list[str]] = None) -> int:
                 yield Input(placeholder='Say something... (/exit to quit)', id='input')
             yield Footer()
 
+        def on_ready(self) -> None:
+            self.query_one('#input', Input).focus()
+
         def on_mount(self) -> None:
             log = self.query_one('#log', Static)
             log.update(
