@@ -127,8 +127,8 @@ class BrowserSkill(Skill):
     def get_tools(self) -> dict[str, Callable]:
         # Lazy import - only load when skill is used
         try:
-            from loop_agent.skills.browser_tools import get_browser_tools
-            return get_browser_tools()
+            from examples.browser_tools import build_browser_tools
+            return build_browser_tools()
         except ImportError as e:
             # Return a error tool if playwright not installed
             def browser_not_available(args):
@@ -146,6 +146,7 @@ register_skill(WebSearchSkill)
 register_skill(MemorySkill)
 register_skill(FileSkill)
 register_skill(CommandSkill)
+register_skill(BrowserSkill)
 
 
 # ============== Skill Loading API ==============
