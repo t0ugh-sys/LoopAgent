@@ -24,9 +24,12 @@ class ChatConfig:
     history_limit: int
 
 
+PROVIDERS = ['openai_compatible', 'anthropic', 'gemini']
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog='loopagent-chat')
-    p.add_argument('--provider', choices=['openai_compatible'], default='openai_compatible')
+    p.add_argument('--provider', choices=PROVIDERS, default='openai_compatible')
     p.add_argument('--model', default='gpt-4o-mini')
     p.add_argument('--base-url', default='https://api.openai.com/v1')
     p.add_argument('--api-key-env', default='OPENAI_API_KEY')
@@ -48,26 +51,59 @@ def _require_textual():
         )
 
 
-def _build_openai_compatible_chat_invoke(cfg: ChatConfig):
-    from .llm.providers import openai_compatible_chat_invoke_factory
+def _build_chat_invoke(cfg: ChatConfig):
+    if cfg.provider == 'openai_compatible':
+        from .llm.providers import openai_compatible_chat_invoke_factory
 
-    api_key = os.getenv(cfg.api_key_env, '').strip()
-    if not api_key:
-        raise SystemExit(f'missing api key env: {cfg.api_key_env}')
+        api_key = os.getenv(cfg.api_key_env, '').strip()
+        if not api_key:
+            raise SystemExit(f'missing api key env: {cfg.api_key_env}')
 
-    return openai_compatible_chat_invoke_factory(
-        base_url=cfg.base_url,
-        api_key=api_key,
-        model=cfg.model,
-        fallback_models=[],
-        temperature=cfg.temperature,
-        timeout_s=cfg.provider_timeout_s,
-        debug=False,
-        extra_headers={},
-        max_retries=2,
-        retry_backoff_s=1.0,
-        retry_http_codes={502, 503, 504, 524},
-    )
+        return openai_compatible_chat_invoke_factory(
+            base_url=cfg.base_url,
+            api_key=api_key,
+            model=cfg.model,
+            fallback_models=[],
+            temperature=cfg.temperature,
+            timeout_s=cfg.provider_timeout_s,
+            debug=False,
+            extra_headers={},
+            max_retries=2,
+            retry_backoff_s=1.0,
+            retry_http_codes={502, 503, 504, 524},
+        )
+
+    if cfg.provider == 'anthropic':
+        from .llm.providers import anthropic_invoke_factory
+
+        api_key = os.getenv(cfg.api_key_env, '').strip()
+        if not api_key:
+            raise SystemExit(f'missing api key env: {cfg.api_key_env}')
+
+        return anthropic_invoke_factory(
+            api_key=api_key,
+            model=cfg.model,
+            temperature=cfg.temperature,
+            timeout_s=cfg.provider_timeout_s,
+            debug=False,
+        )
+
+    if cfg.provider == 'gemini':
+        from .llm.providers import gemini_invoke_factory
+
+        api_key = os.getenv(cfg.api_key_env, '').strip()
+        if not api_key:
+            raise SystemExit(f'missing api key env: {cfg.api_key_env}')
+
+        return gemini_invoke_factory(
+            api_key=api_key,
+            model=cfg.model,
+            temperature=cfg.temperature,
+            timeout_s=cfg.provider_timeout_s,
+            debug=False,
+        )
+
+    raise SystemExit(f'unknown provider: {cfg.provider}')
 
 
 def _chat_dir(root: Path, chat_id: str) -> Path:
@@ -106,7 +142,7 @@ def run(argv: Optional[list[str]] = None) -> int:
         history_limit=int(args.history_limit),
     )
 
-    invoke = _build_openai_compatible_chat_invoke(cfg)
+    invoke = _build_chat_invoke(cfg)
 
     messages_path = chat_dir / 'messages.jsonl'
 
