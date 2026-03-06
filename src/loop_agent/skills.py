@@ -16,12 +16,9 @@ Usage:
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Any, Callable
 
-from loop_agent.agent_protocol import ToolCall, ToolResult
-from loop_agent.tools import ToolContext
+from loop_agent.agent_protocol import ToolResult
 
 
 # Skill definition
@@ -129,14 +126,14 @@ class BrowserSkill(Skill):
         try:
             from examples.browser_tools import build_browser_tools
             return build_browser_tools()
-        except ImportError as e:
+        except ImportError:
             # Return a error tool if playwright not installed
             def browser_not_available(args):
                 return ToolResult(
                     id=str(args.get('id', 'browser')),
                     ok=False,
                     output='',
-                    error=f"Browser skill requires playwright: pip install playwright"
+                    error="Browser skill requires playwright: pip install playwright"
                 )
             return {'browser': browser_not_available}
 
