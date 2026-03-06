@@ -10,13 +10,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from loop_agent.agent_protocol import ToolResult
 from loop_agent.core.agent import LoopAgent
-from loop_agent.core.types import RunResult, StopConfig
-from loop_agent.coding_agent import CodingAgentState, DeciderFn
+from loop_agent.core.types import StopConfig
 from loop_agent.steps.json_loop import JsonLoopState, make_json_decision_step
 
-from .errors import ValidationError, validate_goal, validate_max_steps, validate_temperature
+from .errors import validate_goal, validate_max_steps, validate_temperature
 
 
 @dataclass
@@ -136,7 +134,6 @@ class LoopAgentAPI:
     def run_coding(self, goal: str) -> AgentResult:
         """Run the coding agent with a goal."""
         from loop_agent.coding_agent import run_coding_agent, build_coding_step
-        from loop_agent.tools import ToolContext
         
         goal = validate_goal(goal)
         
@@ -144,7 +141,7 @@ class LoopAgentAPI:
             if not self._invoke_fn:
                 raise ValueError("Coding agent requires a provider function")
             
-            step = build_coding_step(
+            build_coding_step(
                 self._invoke_fn,
                 workspace_root=self.config.workspace,
             )
