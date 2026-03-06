@@ -55,7 +55,7 @@ def build_parser(registry: StepRegistry) -> argparse.ArgumentParser:
     parser.add_argument('--summarize-every', type=int, default=5, help='每 N 个事件更新一次 state_summary')
     parser.add_argument('--record-run', action='store_true', default=True, help='记录本次运行到 runs 目录（默认开启）')
     parser.add_argument('--no-record-run', action='store_false', dest='record_run', help='关闭本次运行记录')
-    parser.add_argument('--runs-dir', default='runs', help='运行记录根目录')
+    parser.add_argument('--runs-dir', default='.loopagent/runs', help='运行记录根目录')
     return parser
 
 
@@ -85,7 +85,7 @@ def build_jsonl_observer(path: str) -> ObserverFn:
     return observer
 
 
-def merge_observers(observers: List[ObserverFn]) -> Optional[ObserverFn ]:
+def merge_observers(observers: List[ObserverFn]) -> Optional[ObserverFn]:
     active = [item for item in observers if item is not None]
     if not active:
         return None
@@ -105,7 +105,7 @@ def execute(args: argparse.Namespace, registry: StepRegistry) -> Tuple[str, int]
     memory_store = JsonlMemoryStore(memory_dir=memory_run_dir, summarize_every=args.summarize_every)
     memory_store.on_event('run_started', {'goal': goal, 'strategy': args.strategy, 'facts': []})
 
-    recorder: Optional[RunRecorder ] = None
+    recorder: Optional[RunRecorder] = None
     observers: List[ObserverFn] = []
     if args.observer_file:
         observers.append(build_jsonl_observer(args.observer_file))
