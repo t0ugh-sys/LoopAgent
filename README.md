@@ -167,6 +167,10 @@ conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --go
 - `events.jsonl`：step/tool/stop 事件流
 - `summary.json`：本次运行摘要
 
+Artifacts / Schema 文档：
+
+- `docs/artifacts-schema.md`
+
 可通过 `--no-record-run` 关闭，或通过 `--runs-dir` 修改记录目录。
 
 ## 上下文记忆（默认开启）
