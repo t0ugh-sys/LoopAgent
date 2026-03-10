@@ -9,7 +9,8 @@
   "type": "commonjs",
   "files": [
     "bin",
-    "src",
+    "src/**/*.py",
+    "src/**/py.typed",
     "pyproject.toml",
     "README.md",
     "LICENSE",
