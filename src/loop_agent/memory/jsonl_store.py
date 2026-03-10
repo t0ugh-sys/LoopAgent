@@ -29,6 +29,7 @@ class JsonlMemoryStore:
     _events_file: Path = field(init=False)
     _state_file: Path = field(init=False)
     _summary_file: Path = field(init=False)
+    _event_count: int = field(init=False, repr=False)
 
     def __post_init__(self) -> None:
         if self.summarize_every < 1:
@@ -37,6 +38,7 @@ class JsonlMemoryStore:
         self._events_file = self.memory_dir / 'events.jsonl'
         self._state_file = self.memory_dir / 'state.json'
         self._summary_file = self.memory_dir / 'summary.json'
+        self._event_count = self._count_events()
         if not self._state_file.exists():
             self._write_state(
                 {
@@ -63,9 +65,9 @@ class JsonlMemoryStore:
         with self._events_file.open('a', encoding='utf-8') as file:
             file.write(json.dumps(row.to_dict(), ensure_ascii=False))
             file.write('\n')
+        self._event_count += 1
         self._update_state(event, payload)
-        event_count = self._count_events()
-        if (event_count % self.summarize_every) == 0 or event == 'run_finished':
+        if (self._event_count % self.summarize_every) == 0 or event == 'run_finished':
             self._summarize()
 
     def load_context(self, *, goal: str, last_k_steps: int) -> MemoryContext:
@@ -140,6 +142,13 @@ class JsonlMemoryStore:
     def _read_last_steps(self, last_k_steps: int) -> List[str]:
         if last_k_steps <= 0:
             return []
+        state = self._read_state()
+        history_tail = state.get('history_tail', [])
+        if isinstance(history_tail, list):
+            steps = [item for item in history_tail if isinstance(item, str) and item]
+            if steps:
+                return steps[-last_k_steps:]
+
         rows = self._read_events()
         steps: List[str] = []
         for row in rows:

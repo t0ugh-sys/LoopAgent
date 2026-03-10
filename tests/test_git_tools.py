@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import subprocess
+import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-import pytest
+import _bootstrap  # noqa: F401
 
 from loop_agent.git_tools import git_merge_and_push_tool
 from loop_agent.tools import ToolContext
@@ -16,35 +18,39 @@ class _Proc:
         self.stderr = stderr
 
 
-def test_merge_and_push_requires_confirm(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    ctx = ToolContext(workspace_root=tmp_path)
+class GitToolsTests(unittest.TestCase):
+    def test_merge_and_push_requires_confirm(self) -> None:
+        ctx = ToolContext(workspace_root=Path('.'))
 
-    def fake_run(*args, **kwargs):
-        raise AssertionError('should short-circuit before running git')
+        def fake_run(*args, **kwargs):
+            raise AssertionError('should short-circuit before running git')
 
-    monkeypatch.setattr(subprocess, 'run', fake_run)
+        with patch.object(subprocess, 'run', side_effect=fake_run):
+            res = git_merge_and_push_tool(
+                ctx,
+                {'source': 'feature', 'target': 'main', 'confirm': False, 'id': 'x'},
+            )
 
-    res = git_merge_and_push_tool(
-        ctx,
-        {'source': 'feature', 'target': 'main', 'confirm': False, 'id': 'x'},
-    )
-    assert res.ok is False
-    assert 'confirm=true' in (res.error or '')
+        self.assertFalse(res.ok)
+        self.assertIn('confirm=true', res.error or '')
+
+    def test_merge_and_push_refuses_dirty_tree(self) -> None:
+        ctx = ToolContext(workspace_root=Path('.'))
+
+        def fake_run(cmd, cwd, env, shell, check, text, capture_output, encoding, errors, timeout):
+            if cmd[:2] == ['git', 'status']:
+                return _Proc(returncode=0, stdout=' M file.txt\n')
+            raise AssertionError(f'unexpected cmd: {cmd}')
+
+        with patch.object(subprocess, 'run', side_effect=fake_run):
+            res = git_merge_and_push_tool(
+                ctx,
+                {'source': 'feature', 'target': 'main', 'confirm': True, 'id': 'x'},
+            )
+
+        self.assertFalse(res.ok)
+        self.assertIn('not clean', res.error or '')
 
 
-def test_merge_and_push_refuses_dirty_tree(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    ctx = ToolContext(workspace_root=tmp_path)
-
-    def fake_run(cmd, cwd, env, shell, check, text, capture_output, encoding, errors, timeout):
-        if cmd[:2] == ['git', 'status']:
-            return _Proc(returncode=0, stdout=' M file.txt\n')
-        raise AssertionError(f'unexpected cmd: {cmd}')
-
-    monkeypatch.setattr(subprocess, 'run', fake_run)
-
-    res = git_merge_and_push_tool(
-        ctx,
-        {'source': 'feature', 'target': 'main', 'confirm': True, 'id': 'x'},
-    )
-    assert res.ok is False
-    assert 'not clean' in (res.error or '')
+if __name__ == '__main__':
+    unittest.main()
