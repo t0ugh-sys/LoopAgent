@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, List, Union
+from typing import Callable, Dict, Iterable, List
 
 from .agent_protocol import ToolCall, ToolResult
 
@@ -19,6 +20,28 @@ class ToolContext:
 
 
 ToolFn = Callable[[ToolContext, Dict[str, object]], ToolResult]
+
+
+_SEARCH_SKIP_DIRS = {
+    '.git',
+    '.loopagent',
+    '.mypy_cache',
+    '.pytest_cache',
+    '.ruff_cache',
+    '.venv',
+    '__pycache__',
+    'build',
+    'dist',
+    'node_modules',
+}
+
+
+def _iter_searchable_files(workspace_root: Path) -> Iterable[Path]:
+    for current_root, dir_names, file_names in os.walk(workspace_root):
+        dir_names[:] = [name for name in dir_names if name not in _SEARCH_SKIP_DIRS]
+        root_path = Path(current_root)
+        for file_name in file_names:
+            yield root_path / file_name
 
 
 def _resolve_inside_workspace(workspace_root: Path, relative_path: str) -> Path:
@@ -192,9 +215,7 @@ def search_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
 
     try:
         results: List[str] = []
-        for path in context.workspace_root.rglob('*'):
-            if not path.is_file():
-                continue
+        for path in _iter_searchable_files(context.workspace_root):
             try:
                 text = path.read_text(encoding='utf-8')
             except Exception:
@@ -283,7 +304,6 @@ def web_search_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult
         
         # Parse results from HTML
         results: List[str] = []
-        import re
         # Match result blocks
         pattern = r'<a rel="nofollow" class="result__a" href="([^"]+)"[^>]*>(.+?)</a>.*?<a class="result__snippet"[^>]*>(.+?)</a>'
         matches = re.findall(pattern, html, re.DOTALL)
@@ -320,10 +340,9 @@ def fetch_url_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
             html = response.read().decode('utf-8', errors='replace')
         
         # Simple HTML to text conversion - remove scripts, styles, and tags
-        import re
         # Remove script and style elements
-        text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=Union[re.DOTALL, re.IGNORECASE])
-        text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=Union[re.DOTALL, re.IGNORECASE])
+        text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
         # Remove all HTML tags
         text = re.sub(r'<[^>]+>', '', text)
         # Clean up whitespace

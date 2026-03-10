@@ -31,6 +31,21 @@ class MemoryStoreTests(unittest.TestCase):
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    def test_should_load_recent_steps_from_state_history(self) -> None:
+        tmp_dir = Path('tests/.tmp') / f'memory-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            store = JsonlMemoryStore(memory_dir=tmp_dir, summarize_every=10)
+            store.on_event('step_succeeded', {'output': 'done1'})
+            store.on_event('step_succeeded', {'output': 'done2'})
+            (tmp_dir / 'events.jsonl').unlink()
+
+            context = store.load_context(goal='g1', last_k_steps=2)
+
+            self.assertEqual(context.last_steps, ('done1', 'done2'))
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
     def test_should_validate_summarize_every(self) -> None:
         tmp_dir = Path('tests/.tmp') / f'memory-{uuid.uuid4().hex}'
         tmp_dir.mkdir(parents=True, exist_ok=True)

@@ -1,7 +1,7 @@
 {
   "name": "@t0ugh-sys/loopagent",
   "version": "0.1.0",
-  "description": "Agent CLI wrapper for LoopAgent Python runtime",
+  "description": "Node CLI wrapper for the LoopAgent Python runtime",
   "main": "bin/loopagent.js",
   "bin": {
     "loopagent": "bin/loopagent.js"
@@ -9,18 +9,36 @@
   "type": "commonjs",
   "files": [
     "bin",
-    "src",
+    "src/**/*.py",
+    "src/**/py.typed",
     "pyproject.toml",
     "README.md",
     "LICENSE",
     "requirements.txt"
   ],
   "scripts": {
-    "build": "echo 'No build step required for Python package'",
-    "prepublishOnly": "echo 'Run: npm version patch && git push && git push --tags'"
+    "test": "python -m unittest discover -s tests -p \"test_*.py\" -v",
+    "pack:check": "npm pack --dry-run",
+    "prepublishOnly": "npm run pack:check"
   },
   "engines": {
     "node": ">=18"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "keywords": [
+    "agent",
+    "cli",
+    "llm",
+    "python",
+    "node",
+    "automation"
+  ],
+  "homepage": "https://github.com/t0ugh-sys/LoopAgent#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/t0ugh-sys/LoopAgent.git"
+  },
+  "bugs": {
+    "url": "https://github.com/t0ugh-sys/LoopAgent/issues"
+  }
 }

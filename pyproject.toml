@@ -1,7 +1,7 @@
 [project]
 name = "LoopAgent"
 version = "0.1.0"
-description = "Enterprise-grade loop agent skeleton (stdlib-only core)."
+description = "Loop-oriented agent framework with a stdlib-only Python core."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
@@ -24,7 +24,7 @@ dependencies = []
 [project.optional-dependencies]
 browser = ["playwright"]
 all = ["playwright"]
-dev = ["pytest", "pytest-cov"]
+dev = []
 tui = ["textual>=0.86.2"]
 
 [project.scripts]
