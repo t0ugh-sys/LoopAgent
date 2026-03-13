@@ -26,6 +26,12 @@ class ChatConfig:
 
 PROVIDERS = ['openai_compatible', 'anthropic', 'gemini']
 
+PROVIDER_LABELS: Dict[str, str] = {
+    'openai_compatible': 'OpenAI Compatible',
+    'anthropic': 'Anthropic Claude',
+    'gemini': 'Google Gemini',
+}
+
 PROVIDER_DEFAULTS: Dict[str, Dict[str, str]] = {
     'openai_compatible': {
         'model': 'gpt-4o-mini',
@@ -43,6 +49,55 @@ PROVIDER_DEFAULTS: Dict[str, Dict[str, str]] = {
         'api_key_env': 'GEMINI_API_KEY',
     },
 }
+
+
+def _cfg_banner(cfg: ChatConfig) -> str:
+    base = cfg.base_url or '(n/a)'
+    label = PROVIDER_LABELS.get(cfg.provider, cfg.provider)
+    return f'Provider: {label} | Model: {cfg.model} | Base URL: {base} | API key env: {cfg.api_key_env}'
+
+
+def _provider_candidates() -> list[str]:
+    return [f'{provider} - {PROVIDER_LABELS.get(provider, provider)}' for provider in PROVIDERS]
+
+
+def _parse_provider_choice(choice: str) -> str:
+    provider = choice.split(' - ', 1)[0].strip()
+    if provider not in PROVIDERS:
+        raise ValueError(f'unknown provider: {provider}')
+    return provider
+
+
+def _build_provider_config(current_cfg: ChatConfig, provider: str) -> ChatConfig:
+    provider = provider.strip()
+    if provider not in PROVIDERS:
+        raise ValueError(f'unknown provider: {provider}')
+
+    defaults = PROVIDER_DEFAULTS[provider]
+    return ChatConfig(
+        provider=provider,
+        model=defaults['model'],
+        base_url=defaults['base_url'],
+        api_key_env=defaults['api_key_env'],
+        temperature=current_cfg.temperature,
+        provider_timeout_s=current_cfg.provider_timeout_s,
+        history_limit=current_cfg.history_limit,
+    )
+
+
+def _build_model_config(current_cfg: ChatConfig, model: str) -> ChatConfig:
+    cleaned = model.strip()
+    if not cleaned:
+        raise ValueError('model must not be empty')
+    return ChatConfig(
+        provider=current_cfg.provider,
+        model=cleaned,
+        base_url=current_cfg.base_url,
+        api_key_env=current_cfg.api_key_env,
+        temperature=current_cfg.temperature,
+        provider_timeout_s=current_cfg.provider_timeout_s,
+        history_limit=current_cfg.history_limit,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -168,27 +223,8 @@ def run(argv: Optional[list[str]] = None) -> int:
     current_cfg = cfg
     current_invoke = invoke
 
-    def _cfg_banner(c: ChatConfig) -> str:
-        base = c.base_url or '(n/a)'
-        return f'Provider: {c.provider} | Model: {c.model} | Base URL: {base} | API key env: {c.api_key_env}'
-
     def _apply_provider_change(provider: str) -> Tuple[ChatConfig, Any, str]:
-        provider = provider.strip()
-        if provider not in PROVIDERS:
-            raise ValueError(f'unknown provider: {provider}')
-
-        defaults = PROVIDER_DEFAULTS[provider]
-
-        new_cfg = ChatConfig(
-            provider=provider,
-            model=defaults['model'],
-            base_url=defaults['base_url'],
-            api_key_env=defaults['api_key_env'],
-            temperature=current_cfg.temperature,
-            provider_timeout_s=current_cfg.provider_timeout_s,
-            history_limit=current_cfg.history_limit,
-        )
-
+        new_cfg = _build_provider_config(current_cfg, provider)
         new_invoke = _build_chat_invoke(new_cfg)
         return new_cfg, new_invoke, _cfg_banner(new_cfg)
 
@@ -248,6 +284,22 @@ def run(argv: Optional[list[str]] = None) -> int:
         def key_escape(self) -> None:
             self.dismiss(None)
 
+    class ProviderPickerScreen(ModalScreen[Optional[str]]):
+        def compose(self) -> ComposeResult:
+            with Vertical(id='panel'):
+                yield Static('Pick a provider', id='title')
+                yield OptionList(*_provider_candidates(), id='options')
+                yield Static('Enter: select | Esc: cancel', id='hint')
+
+        def on_mount(self) -> None:
+            self.query_one('#options', OptionList).focus()
+
+        def on_option_list_option_selected(self, event: OptionList.OptionSelected) -> None:
+            self.dismiss(_parse_provider_choice(str(event.option.prompt)))
+
+        def key_escape(self) -> None:
+            self.dismiss(None)
+
     class ChatApp(App):
         CSS = """
         Screen {
@@ -287,6 +339,7 @@ def run(argv: Optional[list[str]] = None) -> int:
 
         BINDINGS = [
             ('ctrl+c', 'quit', 'Quit'),
+            ('ctrl+p', 'pick_provider', 'Provider'),
             ('ctrl+m', 'pick_model', 'Model'),
         ]
 
@@ -297,11 +350,35 @@ def run(argv: Optional[list[str]] = None) -> int:
                 yield Input(placeholder='Say something... (/exit to quit)', id='input')
             yield Footer()
 
+        def action_pick_provider(self) -> None:
+            self.push_screen(ProviderPickerScreen(), self._on_provider_picked)
+
         def action_pick_model(self) -> None:
             self._open_model_picker()
 
         def _open_model_picker(self) -> None:
             self.push_screen(ModelPickerScreen(), self._on_model_picked)
+
+        def _on_provider_picked(self, value: Optional[str]) -> None:
+            if not value:
+                return
+
+            nonlocal current_cfg, current_invoke
+
+            try:
+                new_cfg, new_invoke, banner = _apply_provider_change(value)
+            except Exception as e:
+                log = self.query_one('#log', Static)
+                existing = str(log.renderable)
+                log.update(existing + f'ERROR: {e}\n')
+                return
+
+            current_cfg = new_cfg
+            current_invoke = new_invoke
+
+            log = self.query_one('#log', Static)
+            existing = str(log.renderable)
+            log.update(existing + f'\n[{banner}]\n')
 
         def _on_model_picked(self, value: Optional[str]) -> None:
             if not value:
@@ -309,17 +386,8 @@ def run(argv: Optional[list[str]] = None) -> int:
 
             nonlocal current_cfg, current_invoke
 
-            new_cfg = ChatConfig(
-                provider=current_cfg.provider,
-                model=value,
-                base_url=current_cfg.base_url,
-                api_key_env=current_cfg.api_key_env,
-                temperature=current_cfg.temperature,
-                provider_timeout_s=current_cfg.provider_timeout_s,
-                history_limit=current_cfg.history_limit,
-            )
-
             try:
+                new_cfg = _build_model_config(current_cfg, value)
                 new_invoke = _build_chat_invoke(new_cfg)
             except Exception as e:
                 log = self.query_one('#log', Static)
@@ -342,7 +410,7 @@ def run(argv: Optional[list[str]] = None) -> int:
             log.update(
                 f'Chat: {chat_id}\n{_cfg_banner(current_cfg)}\n'
                 f'Logs: {chat_dir}\n'
-                "Commands: /provider <openai_compatible|anthropic|gemini>, /model (or Ctrl+M), /reset, /exit\n"
+                "Commands: /provider [name] (or Ctrl+P), /model (or Ctrl+M), /reset, /exit\n"
             )
 
         async def on_input_submitted(self, event: Input.Submitted) -> None:
@@ -365,7 +433,7 @@ def run(argv: Optional[list[str]] = None) -> int:
                 log.update(
                     f'Chat: {chat_id}\n{_cfg_banner(current_cfg)}\n'
                     f'Logs: {chat_dir}\n(reset: messages.jsonl cleared; backup: messages.bak)\n'
-                    "Commands: /provider <openai_compatible|anthropic|gemini>, /model (or Ctrl+M), /reset, /exit\n"
+                    "Commands: /provider [name] (or Ctrl+P), /model (or Ctrl+M), /reset, /exit\n"
                 )
                 return
 
@@ -375,10 +443,8 @@ def run(argv: Optional[list[str]] = None) -> int:
 
             if text.startswith('/provider'):
                 parts = text.split(maxsplit=1)
-                if len(parts) != 2:
-                    log = self.query_one('#log', Static)
-                    existing = str(log.renderable)
-                    log.update(existing + 'Usage: /provider <openai_compatible|anthropic|gemini>\n')
+                if len(parts) == 1:
+                    self.action_pick_provider()
                     return
 
                 try:

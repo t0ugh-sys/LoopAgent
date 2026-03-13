@@ -20,3 +20,4 @@ AGENTS.md
 .env.local
 *.log
 .npm-cache/
+.codex-pr-body.md
