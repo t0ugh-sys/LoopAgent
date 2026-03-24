@@ -22,6 +22,7 @@
 - `policies.py`: capability-based permission governance
 - `worktree_manager.py`: isolated task workspace manager
 - `context_schema.py`: fixed compressed context payloads for agents
+- `scheduler.py`: dependency-aware agent batch scheduler
 - `coding_agent.py`: coding-agent orchestration
 - `agent_cli.py`: coding-agent oriented CLI
 - `cli.py`: general loop CLI

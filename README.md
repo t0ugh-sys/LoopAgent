@@ -99,6 +99,7 @@ python -m loop_agent.agent_cli code --goal "inspect the repository" --workspace 
 - First-pass permission governance via capability policies on tool execution
 - Isolated task workspaces through a worktree manager abstraction
 - Fixed orchestration context schema for compressed task, mailbox, policy, and workspace state
+- Batch scheduler for dependency-aware agent dispatch
 
 ## Skills
 

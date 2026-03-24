@@ -16,6 +16,7 @@ from . import subagents
 from . import policies
 from . import worktree_manager
 from . import context_schema
+from . import scheduler
 
 __all__ = [
     'LoopAgent',
@@ -42,4 +43,5 @@ __all__ = [
     'policies',
     'worktree_manager',
     'context_schema',
+    'scheduler',
 ]
