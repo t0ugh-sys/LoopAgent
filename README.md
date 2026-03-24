@@ -96,6 +96,7 @@ python -m loop_agent.agent_cli code --goal "inspect the repository" --workspace 
 - Swappable providers for mock, OpenAI-compatible, Anthropic, and Gemini flows
 - Built-in skills for files, commands, memory, web search, and optional browser automation
 - First-pass orchestration primitives for task graphs, async mailbox coordination, and sub-agent dispatch
+- First-pass permission governance via capability policies on tool execution
 
 ## Skills
 

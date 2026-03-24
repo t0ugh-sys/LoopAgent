@@ -13,6 +13,7 @@ from . import api
 from . import task_graph
 from . import mailbox
 from . import subagents
+from . import policies
 
 __all__ = [
     'LoopAgent',
@@ -36,4 +37,5 @@ __all__ = [
     'task_graph',
     'mailbox',
     'subagents',
+    'policies',
 ]
