@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, Tuple
 
 from .coding_agent import DeciderFn, run_coding_agent
+from .context_schema import OrchestrationContextInput, build_orchestration_context
 from .core.serialization import run_result_to_dict
-from .core.types import StopConfig
+from .core.types import ContextSnapshot, StopConfig
 from .mailbox import JsonlMailbox, MailMessage
+from .policies import ToolPolicy
 from .task_graph import Task, TaskGraph, TaskStatus
 from .worktree_manager import WorktreeManager
 
@@ -18,6 +20,7 @@ class SubAgentSpec:
     role: str
     workspace_root: Path
     skills: Tuple[str, ...] = tuple()
+    policy: ToolPolicy = ToolPolicy.allow_all()
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
@@ -83,12 +86,37 @@ class SubAgentRuntime:
 
         lease = self.worktree_manager.create(task_id) if self.worktree_manager is not None else None
         workspace_root = lease.workspace_path if lease is not None else spec.workspace_root
+        context_snapshot = build_orchestration_context(
+            OrchestrationContextInput(
+                goal=task.goal,
+                agent_id=spec.agent_id,
+                current_task_id=task_id,
+                workspace_root=workspace_root,
+                mailbox=self.mailbox,
+                task_graph=self.task_graph,
+                policy=spec.policy,
+                facts=tuple(
+                    item for item in task.metadata.get('facts', [])
+                    if isinstance(item, str)
+                ),
+                current_plan=tuple(
+                    item for item in task.metadata.get('current_plan', [])
+                    if isinstance(item, str)
+                ),
+                isolation_mode=lease.mode if lease is not None else 'none',
+            )
+        )
         try:
             result = run_coding_agent(
                 goal=task.goal,
                 decider=decider,
                 workspace_root=workspace_root,
                 stop=stop or StopConfig(max_steps=8, max_elapsed_s=60.0),
+                context_provider=lambda: ContextSnapshot(
+                    state_summary=context_snapshot,
+                    last_steps=tuple(str(item) for item in context_snapshot.get('recent_steps', [])),
+                ),
+                policy=spec.policy,
             )
         finally:
             if lease is not None:

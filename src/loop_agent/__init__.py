@@ -15,6 +15,7 @@ from . import mailbox
 from . import subagents
 from . import policies
 from . import worktree_manager
+from . import context_schema
 
 __all__ = [
     'LoopAgent',
@@ -40,4 +41,5 @@ __all__ = [
     'subagents',
     'policies',
     'worktree_manager',
+    'context_schema',
 ]
