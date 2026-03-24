@@ -1,20 +1,27 @@
 # LoopAgent
 
-这是一个可扩展的"循环执行 Agent"项目骨架：核心库只使用 Python 标准库，支持持续迭代执行，直到满足 `done=True` 或命中停止条件（超时/最大步数/外部取消）。
+LoopAgent is a controllable agent harness for iterative execution, tool calling,
+memory persistence, and coding-agent style runs.
 
-## Python 版本要求
+This repository now follows a layout closer to `learn-claude-code`: a small
+runtime core, a progressive `agents/` learning path, a `skills/` capability
+layer, and focused documentation.
 
-- Requires Python 3.10+
-- 若使用 Python 3.9 或更低版本，可能在导入阶段因 `dict[str, Any]` 等类型语法报错（例如 `TypeError: 'type' object is not subscriptable`）
+## Python Requirement
 
-## 最短可执行路径（推荐默认）
+- Requires Python `3.10+`
+- Recommended: Python `3.11` or `3.12`
+
+## Quick Start
 
 ```bash
 python -m pip install -e .
 python -m unittest discover -s tests -p "test_*.py" -v
+python -m loop_agent.agent_cli tools
+python -m loop_agent.agent_cli code --goal "inspect README then finish" --workspace . --provider mock --model mock-v3 --output json
 ```
 
-## NPM 一键安装运行（Node 用户）
+## Install From GitHub Via npm
 
 ```bash
 npm i -g git+https://github.com/t0ugh-sys/LoopAgent.git
@@ -22,244 +29,113 @@ loopagent tools
 loopagent code --goal "inspect README then finish" --workspace . --provider mock --model mock-v3 --output json
 ```
 
-> 注意：`npm i -g @t0ugh-sys/loopagent` 仅在包已发布到 npm registry 后可用；未发布会返回 404。
+`@t0ugh-sys/loopagent` will only work after publishing to the npm registry.
 
-说明：
+## Learn The Project
 
-- 首次运行会自动检测 Python 3.11+、创建本地虚拟环境并安装当前包
-- 可通过 `LOOPAGENT_PYTHON` 指定 Python 可执行文件
+The repository is organized as a progressive learning path instead of a single
+large demo:
 
-运行 CLI：
+- `agents/`: runnable stages from minimal loop to coding agent
+- `skills/`: capability notes for built-in skills and extension rules
+- `docs/`: repo layout, run artifacts, and learning path documentation
+- `src/loop_agent/`: production runtime, CLI, tools, memory, providers
+- `examples/`: API and integration examples outside the guided path
+
+Start here:
+
+1. Read [agents/README.md](D:\workspace\LoopAgent\agents\README.md)
+2. Run [agents/s01_loop.py](D:\workspace\LoopAgent\agents\s01_loop.py)
+3. Move through the rest of the `agents/` stages in order
+
+## Guided Agent Stages
+
+| Stage | Focus | File |
+| --- | --- | --- |
+| S01 | Minimal iterative loop | `agents/s01_loop.py` |
+| S02 | Structured JSON protocol | `agents/s02_protocol.py` |
+| S03 | Persistent memory and summaries | `agents/s03_memory.py` |
+| S04 | Skills and capability loading | `agents/s04_skills.py` |
+| S05 | Coding agent and tools | `agents/s05_coding.py` |
+| FULL | Combined harness view | `agents/s_full.py` |
+
+## Main CLI
+
+General loop runner:
 
 ```bash
 python -m loop_agent.cli --goal "write a one-line self introduction" --strategy demo --output json
 ```
 
-Agent CLI（子命令）：
+Coding-agent runner:
 
 ```bash
-python -m loop_agent.agent_cli tools
-python -m loop_agent.agent_cli code --goal "inspect README then finish" --workspace . --provider mock --model mock-v3 --output json
+python -m loop_agent.agent_cli code --goal "fix failing test" --workspace . --provider mock --model mock-v3 --output json
 ```
 
-CI 使用 GitHub Actions 在 Python 3.11/3.12 上运行 `unittest`（见 `.github/workflows/ci.yml`）。
+List built-in skills:
 
-核心引擎在 `step` 抛异常时不会让进程直接崩溃，而是返回 `stop_reason=step_error` 并附带错误信息，便于上层统一治理。
-核心引擎支持可选 `observer` 事件回调，便于接日志、埋点和监控系统。
+```bash
+python -m loop_agent.agent_cli skills
+```
 
-## 依赖说明
+Run with explicit skills:
 
-- core（`src/loop_agent/`）是 stdlib-only
-- `requirements.txt` 仅作为 examples/扩展依赖占位
+```bash
+python -m loop_agent.agent_cli code --goal "inspect the repository" --workspace . --provider mock --model mock-v3 --skill files --skill memory --output json
+```
 
-## 结构
+## What LoopAgent Already Supports
 
-- `src/loop_agent/`：核心库（stdlib-only）
-- `tests/`：单元测试（`unittest`）
-- `examples/`：可选示例（可能需要额外依赖）
+- Controlled loop execution with explicit stop reasons
+- Structured coding-agent protocol with tool calls
+- Workspace-safe tools such as `read_file`, `write_file`, `apply_patch`, `search`, and `run_command`
+- Persistent run traces in `.loopagent/runs/<run_id>/`
+- State summary injection with `state_summary` and `last_steps`
+- Swappable providers for mock, OpenAI-compatible, Anthropic, and Gemini flows
+- Built-in skills for files, commands, memory, web search, and optional browser automation
 
-## 可选：Conda 方式
+## Skills
 
-在项目根目录执行：
+Built-in skills are documented under [skills/README.md](D:\workspace\LoopAgent\skills\README.md).
+
+Current built-ins:
+
+- `files`
+- `commands`
+- `memory`
+- `web_search`
+- `browser` (optional dependency)
+
+## Run Artifacts
+
+Each recorded run can write:
+
+- `events.jsonl`: event stream for replay/debugging
+- `state.json`: latest state snapshot
+- `summary.json`: compact long-term summary
+
+Artifact details are documented in
+[docs/artifacts-schema.md](D:\workspace\LoopAgent\docs\artifacts-schema.md).
+
+## Repository Docs
+
+- [docs/learning-path.md](D:\workspace\LoopAgent\docs\learning-path.md)
+- [docs/repo-layout.md](D:\workspace\LoopAgent\docs\repo-layout.md)
+- [examples/README.md](D:\workspace\LoopAgent\examples\README.md)
+
+## Testing
+
+```bash
+python -m unittest discover -s tests -p "test_*.py" -v
+```
+
+Conda example:
 
 ```powershell
-$env:PYTHONPATH="src"
 conda --no-plugins run --no-capture-output -n base python -m unittest discover -s tests -p "test_*.py" -v
 ```
 
-## 快速开始（运行 CLI）
+## License
 
-```powershell
-$env:PYTHONPATH="src"
-conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --strategy demo
-```
-
-内置策略：
-
-- `demo`：固定三轮收敛
-- `json_stub`：按 JSON 协议迭代，模拟 LLM 输出
-- `json_llm`：调用可配置模型（provider/model 可切换）
-
-例如切换到 `json_stub`：
-
-```powershell
-$env:PYTHONPATH="src"
-conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --strategy json_stub --history-window 2
-```
-
-切换模型（参数化切换）：
-
-```bash
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider mock --model qwen-max
-```
-
-OpenAI-compatible provider 示例：
-
-```bash
-set OPENAI_API_KEY=sk-xxx
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-4o-mini --base-url https://api.openai.com/v1 --wire-api chat_completions
-```
-
-如果服务端是 Responses 协议（例如 `wire_api=responses`）：
-
-```bash
-set OPENAI_API_KEY=sk-xxx
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses
-```
-
-若网关需要额外头（例如租户路由）：
-
-```bash
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --provider-header "x-tenant:my-team" --provider-header "x-trace-id:demo-1"
-```
-
-网关不稳定时可开启重试与模型回退：
-
-```bash
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --fallback-model gpt-5-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --max-retries 3 --retry-backoff-s 1.0 --retry-http-code 502 --retry-http-code 503
-```
-
-Anthropic Claude provider 示例：
-
-```bash
-set ANTHROPIC_API_KEY=sk-ant-xxx
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider anthropic --model claude-3-opus-20240229
-```
-
-Google Gemini provider 示例：
-
-```bash
-set GEMINI_API_KEY=xxx
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider gemini --model gemini-pro
-```
-
-`code` 子命令同样支持 provider/model 切换：
-
-```bash
-set OPENAI_API_KEY=sk-xxx
-python -m loop_agent.agent_cli code --goal "fix failing test" --workspace . --provider openai_compatible --model gpt-4o-mini --base-url https://api.openai.com/v1 --wire-api chat_completions
-```
-
-机器可读输出（便于 CI 或平台接入）：
-
-```powershell
-$env:PYTHONPATH="src"
-conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --output json --include-history
-```
-
-事件落盘（JSONL）：
-
-```powershell
-$env:PYTHONPATH="src"
-conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --observer-file .\events.jsonl
-```
-
-失败返回非零退出码（适合 CI）：
-
-```powershell
-$env:PYTHONPATH="src"
-conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --strategy json_stub --max-steps 1 --exit-on-failure
-```
-
-基础运行记录（默认开启）：
-
-- 每次 CLI 运行会在 `runs/<timestamp>/` 生成：
-- `events.jsonl`：step/tool/stop 事件流
-- `summary.json`：本次运行摘要
-
-可通过 `--no-record-run` 关闭，或通过 `--runs-dir` 修改记录目录。
-
-## 上下文记忆（默认开启）
-
-- 默认记忆根目录：`.loopagent/runs`
-- 每次运行会落盘到 `.loopagent/runs/<run_id>/`
-- 关键文件：
-- `events.jsonl`：完整事件流（可回放）
-- `state.json`：当前快照（goal、step_index、last_output、history_tail）
-- `summary.json`：长期摘要（goal/current_plan/facts/work_done/open_questions/next_actions）
-
-CLI 参数：
-
-- `--memory-dir`：记忆根目录（默认 `.loopagent/runs`）
-- `--run-id`：指定运行 ID（默认 UTC 时间戳）
-- `--summarize-every`：每 N 个事件更新一次摘要（默认 5）
-
-每一步都会固定注入结构化上下文：
-
-- `state_summary`（长期摘要）
-- `last_steps`（最近 K 步，K 由 `--history-window` 控制）
-
-示例 `goal.txt` 请用 UTF-8 保存，例如内容为：
-
-```
-给我一段 50 字以内的中文自我介绍
-```
-
-## 运行示例（JSON 协议 + stub 模型）
-
-```powershell
-$env:PYTHONPATH="src"
-conda --no-plugins run --no-capture-output -n base python .\examples\json_loop_stub_demo.py
-```
-
-## 推荐用法（安装为包）
-
-开源场景默认推荐上面的 `pip install -e .` 路径；下面是 Conda 环境里的等价写法：
-
-```powershell
-conda --no-plugins run -n base python -m pip install -e .
-conda --no-plugins run --no-capture-output -n base python -m unittest discover -s tests -p "test_*.py" -v
-conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt
-```
-
-## Skill 系统
-
-LoopAgent 支持可插拔的 Skill 系统，可以动态加载功能模块。
-
-### 内置 Skills
-
-| Skill | 说明 | 依赖 |
-|-------|------|------|
-| `web_search` | 联网搜索、获取网页 | stdlib |
-| `memory` | 分析历史运行、学习模式 | stdlib |
-| `files` | 文件读写、搜索 | stdlib |
-| `commands` | 运行 Shell 命令 | stdlib |
-| `browser` | 浏览器自动化 | playwright |
-
-### 使用 Skill
-
-```bash
-# 加载指定 skills
-python -m loop_agent.agent_cli code --goal "search for info" --skill web_search --skill memory
-
-# 加载所有内置 skills（默认）
-python -m loop_agent.agent_cli code --goal "your goal" --skill all
-```
-
-### 创建自定义 Skill
-
-```python
-from loop_agent.skills import Skill, register_skill
-
-class MySkill(Skill):
-    name = "my_skill"
-    description = "My custom skill"
-    
-    def get_tools(self):
-        def my_tool(args):
-            return ToolResult(id="my_tool", ok=True, output="Hello!", error=None)
-        return {"my_tool": my_tool}
-
-# 注册并使用
-register_skill(MySkill)
-# 或通过 --skill 参数加载
-```
-
-### Skill 工具
-
-- `web_search`: 搜索网络（query 参数）
-- `fetch_url`: 获取网页内容（url 参数）
-- `analyze_memory`: 分析历史运行（memory_dir, goal_filter, limit 参数）
-- `read_file`, `write_file`, `apply_patch`, `search`: 文件操作
-- `run_command`: 执行命令（command 或 cmd 参数）
-- `browser_navigate`, `browser_click`, `browser_fill`, `browser_screenshot`: 浏览器操作
+MIT
