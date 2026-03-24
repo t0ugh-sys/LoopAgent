@@ -9,6 +9,7 @@ from .core.serialization import run_result_to_dict
 from .core.types import StopConfig
 from .mailbox import JsonlMailbox, MailMessage
 from .task_graph import Task, TaskGraph, TaskStatus
+from .worktree_manager import WorktreeManager
 
 
 @dataclass(frozen=True)
@@ -31,10 +32,18 @@ class SubAgentResult:
 
 
 class SubAgentRuntime:
-    def __init__(self, *, mailbox: JsonlMailbox, task_graph: TaskGraph, coordinator_id: str = 'coordinator') -> None:
+    def __init__(
+        self,
+        *,
+        mailbox: JsonlMailbox,
+        task_graph: TaskGraph,
+        coordinator_id: str = 'coordinator',
+        worktree_manager: WorktreeManager | None = None,
+    ) -> None:
         self.mailbox = mailbox
         self.task_graph = task_graph
         self.coordinator_id = coordinator_id
+        self.worktree_manager = worktree_manager
 
     def spawn(self, spec: SubAgentSpec, task: Task) -> Task:
         assigned = self.task_graph.assign_task(task.id, spec.agent_id)
@@ -72,17 +81,33 @@ class SubAgentRuntime:
             )
         )
 
-        result = run_coding_agent(
-            goal=task.goal,
-            decider=decider,
-            workspace_root=spec.workspace_root,
-            stop=stop or StopConfig(max_steps=8, max_elapsed_s=60.0),
-        )
+        lease = self.worktree_manager.create(task_id) if self.worktree_manager is not None else None
+        workspace_root = lease.workspace_path if lease is not None else spec.workspace_root
+        try:
+            result = run_coding_agent(
+                goal=task.goal,
+                decider=decider,
+                workspace_root=workspace_root,
+                stop=stop or StopConfig(max_steps=8, max_elapsed_s=60.0),
+            )
+        finally:
+            if lease is not None:
+                self.worktree_manager.cleanup(lease)
         payload = run_result_to_dict(result, include_history=True)
         if result.done:
-            self.task_graph.mark_completed(task_id, metadata={'stop_reason': result.stop_reason.value})
+            self.task_graph.mark_completed(
+                task_id,
+                metadata={'stop_reason': result.stop_reason.value, 'workspace_root': str(workspace_root)},
+            )
         else:
-            self.task_graph.mark_failed(task_id, metadata={'stop_reason': result.stop_reason.value, 'error': result.error})
+            self.task_graph.mark_failed(
+                task_id,
+                metadata={
+                    'stop_reason': result.stop_reason.value,
+                    'error': result.error,
+                    'workspace_root': str(workspace_root),
+                },
+            )
 
         self.mailbox.send(
             MailMessage(

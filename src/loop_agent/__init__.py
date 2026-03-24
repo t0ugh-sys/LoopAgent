@@ -14,6 +14,7 @@ from . import task_graph
 from . import mailbox
 from . import subagents
 from . import policies
+from . import worktree_manager
 
 __all__ = [
     'LoopAgent',
@@ -38,4 +39,5 @@ __all__ = [
     'mailbox',
     'subagents',
     'policies',
+    'worktree_manager',
 ]

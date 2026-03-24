@@ -11,7 +11,8 @@ to this repository's architecture.
 4. Skill loading: `agents/s04_skills.py`
 5. Coding-agent execution: `agents/s05_coding.py`
 6. Team orchestration: `agents/s06_team.py`
-7. Consolidated view: `agents/s_full.py`
+7. Worktree isolation: future orchestration stage built on `worktree_manager.py`
+8. Consolidated view: `agents/s_full.py`
 
 ## Why This Layout
 
