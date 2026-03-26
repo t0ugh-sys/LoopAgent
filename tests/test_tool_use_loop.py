@@ -9,6 +9,8 @@ import _bootstrap  # noqa: F401
 
 from loop_agent.core.types import StepContext
 from loop_agent.skills import SkillLoader
+from loop_agent.task_graph import Task, TaskGraph
+from loop_agent.task_store import TaskStore
 from loop_agent.tool_use_loop import ToolUseState, make_tool_use_step
 from loop_agent.todo import TodoItem
 
@@ -187,5 +189,43 @@ class ToolUseLoopTests(unittest.TestCase):
             self.assertIn('available_skills', summary)
             self.assertEqual(summary['available_skills'][0]['name'], 'files')
             self.assertNotIn('read, write, patch', str(summary))
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_inject_task_state_from_task_store(self) -> None:
+        tmp_dir = Path('tests/.tmp') / f'tool-loop-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        captured = {}
+        try:
+            store = TaskStore(tmp_dir / '.tasks')
+            store.save_graph(
+                TaskGraph(
+                    [
+                        Task(id='t1', title='Inspect', goal='inspect repo'),
+                        Task(id='t2', title='Patch', goal='patch repo', dependencies=('t1',)),
+                    ]
+                )
+            )
+
+            def decider(goal, history, tool_results, state_summary, last_steps) -> str:
+                captured['state_summary'] = state_summary
+                return '{"thought":"done now","plan":[],"tool_calls":[],"final":null}'
+
+            step = make_tool_use_step(decider=decider, workspace_root=tmp_dir, task_store=store)
+            context = StepContext(
+                goal='x',
+                state=ToolUseState(),
+                step_index=0,
+                started_at_s=0.0,
+                now_s=0.0,
+                history=tuple(),
+            )
+            step(context)
+
+            summary = captured['state_summary']
+            self.assertIn('task_state', summary)
+            self.assertEqual(summary['task_state']['counts']['total'], 2)
+            self.assertEqual(summary['task_state']['ready'][0]['id'], 't1')
+            self.assertEqual(summary['task_state']['pending'][0]['id'], 't2')
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)

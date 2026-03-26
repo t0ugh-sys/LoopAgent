@@ -17,6 +17,7 @@ from .memory.jsonl_store import JsonlMemoryStore
 from .ops.doctor import format_doctor_report, run_provider_doctor
 from .run_recorder import RunRecorder
 from .skills import SkillLoader, list_skills, get_skill
+from .task_store import TaskStore
 from .tools import build_default_tools
 
 
@@ -111,6 +112,7 @@ def _merge_observers(observers: List[ObserverFn]) -> Optional[ObserverFn]:
 def _run_code_command(args: argparse.Namespace) -> int:
     goal = _resolve_goal(args)
     workspace_root = Path(args.workspace).resolve()
+    task_store = TaskStore((workspace_root / args.tasks_dir).resolve()) if args.tasks_dir else None
     run_id = args.run_id or _default_run_id()
     memory_run_dir = Path(args.memory_dir) / run_id
     memory_store = JsonlMemoryStore(memory_dir=memory_run_dir, summarize_every=args.summarize_every)
@@ -140,6 +142,7 @@ def _run_code_command(args: argparse.Namespace) -> int:
         observer=observer,
         context_provider=context_provider,
         skills=skills,
+        task_store=task_store,
     )
     memory_store.on_event(
         'run_finished',
@@ -283,6 +286,7 @@ def build_parser() -> argparse.ArgumentParser:
     memory_group.add_argument('--record-run', action='store_true', default=True)
     memory_group.add_argument('--no-record-run', action='store_false', dest='record_run')
     memory_group.add_argument('--runs-dir', default='.loopagent/runs', help='Directory for structured run artifacts')
+    memory_group.add_argument('--tasks-dir', default='.tasks', help='Workspace-relative task graph directory injected into context')
 
     tool_group = code.add_argument_group('tool dispatch')
     tool_group.add_argument(

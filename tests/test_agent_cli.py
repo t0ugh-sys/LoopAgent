@@ -126,6 +126,8 @@ class AgentCliTests(unittest.TestCase):
                 'events.jsonl',
                 '--no-record-run',
                 '--include-history',
+                '--tasks-dir',
+                '.tasks-dev',
             ]
         )
         self.assertEqual(args.memory_dir, 'mem')
@@ -134,6 +136,7 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(args.observer_file, 'events.jsonl')
         self.assertFalse(args.record_run)
         self.assertTrue(args.include_history)
+        self.assertEqual(args.tasks_dir, '.tasks-dev')
 
     def test_should_record_structured_tool_events(self) -> None:
         parser = build_parser()
@@ -170,6 +173,30 @@ class AgentCliTests(unittest.TestCase):
             self.assertIn('tool_calls', metadata)
             self.assertIn('tool_results', metadata)
             self.assertIn('todo_state', metadata)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_create_task_store_directory_by_default(self) -> None:
+        parser = build_parser()
+        tmp_dir = Path('tests/.tmp') / f'ocli-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        (tmp_dir / 'README.md').write_text('hello', encoding='utf-8')
+        try:
+            args = parser.parse_args(
+                [
+                    'code',
+                    '--goal',
+                    'read workspace then finalize',
+                    '--workspace',
+                    str(tmp_dir),
+                    '--provider',
+                    'mock',
+                    '--model',
+                    'mock-v3',
+                ]
+            )
+            _run_code_command(args)
+            self.assertTrue((tmp_dir / '.tasks').exists())
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 

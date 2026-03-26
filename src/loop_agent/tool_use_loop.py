@@ -7,6 +7,8 @@ from typing import Callable, Dict, List, Optional, Tuple
 from .agent_protocol import ToolResult, parse_agent_step, render_agent_step_schema
 from .core.types import StepContext, StepResult
 from .policies import ToolPolicy
+from .task_graph import TaskGraph, TaskStatus
+from .task_store import TaskStore
 from .todo import TodoItem, TodoManager, TodoSnapshot, render_todo_lines
 from .tools import ToolContext, ToolDispatchMap, build_default_tools, execute_tool_call
 
@@ -74,14 +76,69 @@ def _build_todo_state_summary(
     return summary
 
 
+def _build_task_state_summary(task_store: TaskStore | None) -> Dict[str, object]:
+    if task_store is None:
+        return {'enabled': False}
+
+    task_files = task_store.list_task_files()
+    if not task_files:
+        return {
+            'enabled': True,
+            'root_dir': str(task_store.root_dir),
+            'counts': {'total': 0},
+            'pending': [],
+            'ready': [],
+            'running': [],
+            'blocked': [],
+            'completed': [],
+            'failed': [],
+        }
+
+    graph = task_store.load_graph()
+    return _summarize_task_graph(graph, task_store=task_store)
+
+
+def _summarize_task_graph(graph: TaskGraph, *, task_store: TaskStore) -> Dict[str, object]:
+    tasks = graph.tasks()
+
+    def collect(status: TaskStatus) -> List[Dict[str, str]]:
+        return [
+            {'id': task.id, 'title': task.title}
+            for task in tasks
+            if task.status == status
+        ]
+
+    return {
+        'enabled': True,
+        'root_dir': str(task_store.root_dir),
+        'counts': {
+            'total': len(tasks),
+            'pending': sum(1 for task in tasks if task.status == TaskStatus.pending),
+            'ready': sum(1 for task in tasks if task.status == TaskStatus.ready),
+            'running': sum(1 for task in tasks if task.status == TaskStatus.running),
+            'blocked': sum(1 for task in tasks if task.status == TaskStatus.blocked),
+            'completed': sum(1 for task in tasks if task.status == TaskStatus.completed),
+            'failed': sum(1 for task in tasks if task.status == TaskStatus.failed),
+        },
+        'pending': collect(TaskStatus.pending),
+        'ready': collect(TaskStatus.ready),
+        'running': collect(TaskStatus.running),
+        'blocked': collect(TaskStatus.blocked),
+        'completed': collect(TaskStatus.completed),
+        'failed': collect(TaskStatus.failed),
+    }
+
+
 def _augment_state_summary(
     context: StepContext[ToolUseState],
     *,
     nag_after_rounds: int,
     skills: Optional['SkillLoader'] = None,
+    task_store: TaskStore | None = None,
 ) -> Dict[str, object]:
     summary = dict(context.state_summary)
     summary['todo_state'] = _build_todo_state_summary(context.state, nag_after_rounds=nag_after_rounds)
+    summary['task_state'] = _build_task_state_summary(task_store)
     reminder = summary['todo_state'].get('reminder')
     if reminder:
         summary['todo_reminder'] = reminder
@@ -150,8 +207,14 @@ def execute_tool_use_round(
     dispatch_map: ToolDispatchMap,
     nag_after_rounds: int = 3,
     skills: Optional['SkillLoader'] = None,
+    task_store: TaskStore | None = None,
 ) -> StepResult[ToolUseState]:
-    augmented_state_summary = _augment_state_summary(context, nag_after_rounds=nag_after_rounds, skills=skills)
+    augmented_state_summary = _augment_state_summary(
+        context,
+        nag_after_rounds=nag_after_rounds,
+        skills=skills,
+        task_store=task_store,
+    )
     todo_manager = TodoManager(
         TodoSnapshot(
             items=context.state.todos,
@@ -215,6 +278,7 @@ def make_tool_use_step(
     policy: ToolPolicy = ToolPolicy.allow_all(),
     extra_tools: Optional[ToolDispatchMap] = None,
     todo_nag_after_rounds: int = 3,
+    task_store: TaskStore | None = None,
 ) -> Callable[[StepContext[ToolUseState]], StepResult[ToolUseState]]:
     dispatch_map = build_tool_dispatch(skills=skills, extra_tools=extra_tools)
     tool_context = ToolContext(workspace_root=workspace_root, policy=policy)
@@ -227,6 +291,7 @@ def make_tool_use_step(
             dispatch_map=dispatch_map,
             nag_after_rounds=todo_nag_after_rounds,
             skills=skills,
+            task_store=task_store,
         )
 
     return step

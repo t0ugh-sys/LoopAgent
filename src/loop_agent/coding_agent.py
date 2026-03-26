@@ -7,6 +7,7 @@ from typing import Optional
 from .core.agent import LoopAgent
 from .core.types import ContextProviderFn, ObserverFn, RunResult, StopConfig
 from .policies import ToolPolicy
+from .task_store import TaskStore
 from .tool_use_loop import DeciderFn, ToolUseState, make_tool_use_step
 
 try:
@@ -25,12 +26,14 @@ def build_coding_step(
     workspace_root: Path,
     skills: Optional[SkillLoader] = None,
     policy: ToolPolicy = ToolPolicy.allow_all(),
+    task_store: TaskStore | None = None,
 ):
     return make_tool_use_step(
         decider=decider,
         workspace_root=workspace_root,
         skills=skills,
         policy=policy,
+        task_store=task_store,
     )
 
 
@@ -44,8 +47,15 @@ def run_coding_agent(
     context_provider: Optional[ContextProviderFn] = None,
     skills: Optional[SkillLoader] = None,
     policy: ToolPolicy = ToolPolicy.allow_all(),
+    task_store: TaskStore | None = None,
 ) -> RunResult[CodingAgentState]:
-    step = build_coding_step(decider, workspace_root=workspace_root, skills=skills, policy=policy)
+    step = build_coding_step(
+        decider,
+        workspace_root=workspace_root,
+        skills=skills,
+        policy=policy,
+        task_store=task_store,
+    )
     agent = LoopAgent(step=step, stop=stop or StopConfig(max_steps=20, max_elapsed_s=60.0))
     return agent.run(
         goal=goal,
