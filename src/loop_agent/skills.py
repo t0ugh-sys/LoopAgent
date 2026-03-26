@@ -56,14 +56,48 @@ def _skills_docs_root() -> Path:
 
 
 def _skill_doc_path(name: str) -> Path:
+    return _skills_docs_root() / name / 'SKILL.md'
+
+
+def _legacy_skill_doc_path(name: str) -> Path:
     return _skills_docs_root() / f'{name}.md'
 
 
-def _read_skill_doc(name: str) -> str:
+def _parse_skill_frontmatter(raw: str) -> tuple[dict[str, str], str]:
+    text = raw.strip()
+    if not text.startswith('---\n'):
+        return {}, text
+
+    lines = text.splitlines()
+    meta: dict[str, str] = {}
+    end_index = -1
+    for index in range(1, len(lines)):
+        line = lines[index].strip()
+        if line == '---':
+            end_index = index
+            break
+        if ':' not in line:
+            continue
+        key, value = line.split(':', 1)
+        meta[key.strip()] = value.strip()
+
+    if end_index < 0:
+        return {}, text
+
+    body = '\n'.join(lines[end_index + 1 :]).strip()
+    return meta, body
+
+
+def _read_skill_doc(name: str) -> tuple[dict[str, str], str]:
     path = _skill_doc_path(name)
-    if not path.exists():
-        return ''
-    return path.read_text(encoding='utf-8').strip()
+    if path.exists():
+        return _parse_skill_frontmatter(path.read_text(encoding='utf-8'))
+
+    legacy_path = _legacy_skill_doc_path(name)
+    if legacy_path.exists():
+        return _parse_skill_frontmatter(legacy_path.read_text(encoding='utf-8'))
+
+    return {}, ''
 
 
 def get_skill(name: str) -> Skill | None:
@@ -83,7 +117,11 @@ def skill_metadata(name: str) -> dict[str, str] | None:
     skill = get_skill(name)
     if skill is None:
         return None
-    return {'name': skill.name, 'description': skill.description}
+    meta, _ = _read_skill_doc(name)
+    return {
+        'name': meta.get('name', skill.name),
+        'description': meta.get('description', skill.description),
+    }
 
 
 # ============== Built-in Skills ==============
@@ -232,20 +270,26 @@ class SkillLoader:
     def metadata(self) -> list[dict[str, str]]:
         items: list[dict[str, str]] = []
         for skill in self._loaded_skills.values():
-            items.append({'name': skill.name, 'description': skill.description})
+            meta = skill_metadata(skill.name)
+            if meta is None:
+                items.append({'name': skill.name, 'description': skill.description})
+            else:
+                items.append(meta)
         return items
 
     def load_body(self, name: str) -> str | None:
         skill = self._loaded_skills.get(name)
         if skill is None:
             return None
-        body = _read_skill_doc(name)
+        meta, body = _read_skill_doc(name)
         if body:
             return body
         generated = skill.get_body().strip()
         if generated:
             return generated
-        return f'# {skill.name}\n\n{skill.description}'
+        title = meta.get('name', skill.name)
+        description = meta.get('description', skill.description)
+        return f'# {title}\n\n{description}'
     
     def list_loaded(self) -> list[str]:
         """List loaded skill names."""

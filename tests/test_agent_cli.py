@@ -32,7 +32,7 @@ class AgentCliTests(unittest.TestCase):
 
         prompt = captured['prompt']
         self.assertIn('Available skills:', prompt)
-        self.assertIn('- files: Read, write, and search files', prompt)
+        self.assertIn('- files: Read, write, patch, and search files', prompt)
         self.assertNotIn('# LoopAgent Skills', prompt)
 
     def test_should_describe_tool_use_loop_in_root_help(self) -> None:
