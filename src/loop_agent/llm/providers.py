@@ -6,9 +6,10 @@ import os
 import time
 import urllib.error
 import urllib.request
-from typing import Callable
+from typing import Callable, Dict, List, Optional, Set
 
 InvokeFn = Callable[[str], str]
+ChatInvokeFn = Callable[[List[Dict[str, str]]], str]
 
 DEFAULT_RETRY_HTTP_CODES = {502, 503, 504, 524}
 
@@ -21,7 +22,7 @@ def _anthropic_invoke_factory(
     timeout_s: float,
     max_retries: int,
     retry_backoff_s: float,
-    retry_http_codes: set[int],
+    retry_http_codes: Set[int],
 ) -> InvokeFn:
     endpoint = 'https://api.anthropic.com/v1/messages'
     headers = {
@@ -53,7 +54,7 @@ def _anthropic_invoke_factory(
             raise ProviderHttpError(status_code=int(exc.code), body=error_body) from exc
 
     def invoke(prompt: str) -> str:
-        last_http_error: ProviderHttpError | None = None
+        last_http_error: Optional[ProviderHttpError ] = None
         for attempt in range(max_retries + 1):
             try:
                 response = _request_once(prompt)
@@ -83,7 +84,7 @@ def _gemini_invoke_factory(
     timeout_s: float,
     max_retries: int,
     retry_backoff_s: float,
-    retry_http_codes: set[int],
+    retry_http_codes: Set[int],
 ) -> InvokeFn:
     base_url = 'https://generativelanguage.googleapis.com/v1'
     endpoint = f'{base_url}/models/{model}:generateContent?key={api_key}'
@@ -112,7 +113,7 @@ def _gemini_invoke_factory(
             raise ProviderHttpError(status_code=int(exc.code), body=error_body) from exc
 
     def invoke(prompt: str) -> str:
-        last_http_error: ProviderHttpError | None = None
+        last_http_error: Optional[ProviderHttpError ] = None
         for attempt in range(max_retries + 1):
             try:
                 response = _request_once(prompt)
@@ -145,6 +146,101 @@ class ProviderHttpError(Exception):
         super().__init__(f'HTTP {status_code}: {body}')
         self.status_code = status_code
         self.body = body
+
+
+def openai_compatible_chat_invoke_factory(
+    *,
+    base_url: str,
+    api_key: str,
+    model: str,
+    fallback_models: List[str],
+    temperature: float,
+    timeout_s: float,
+    debug: bool,
+    extra_headers: Dict[str, str],
+    max_retries: int,
+    retry_backoff_s: float,
+    retry_http_codes: Set[int],
+) -> ChatInvokeFn:
+    """Return a chat invoke function that accepts OpenAI chat messages.
+
+    `wire_api` is intentionally not supported here yet; TUI uses chat/completions.
+    """
+
+    base = base_url.rstrip('/')
+    endpoint = base + '/chat/completions'
+
+    models_to_try = [model, *fallback_models]
+
+    def _request_once(messages: List[Dict[str, str]], current_model: str) -> dict:
+        payload = {
+            'model': current_model,
+            'messages': messages,
+            'temperature': temperature,
+        }
+        body = json.dumps(payload).encode('utf-8')
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+            'User-Agent': 'LoopAgent/0.1 (+https://github.com/t0ugh-sys/LoopAgent)',
+            'Authorization': f'Bearer {api_key}',
+        }
+        headers.update(extra_headers)
+        request = urllib.request.Request(endpoint, data=body, headers=headers, method='POST')
+        try:
+            with urllib.request.urlopen(request, timeout=timeout_s) as response:
+                raw = response.read().decode('utf-8')
+        except urllib.error.HTTPError as exc:
+            error_body = ''
+            try:
+                error_body = exc.read().decode('utf-8', errors='replace')
+            except Exception:
+                error_body = ''
+            raise ProviderHttpError(status_code=int(exc.code), body=error_body) from exc
+        return json.loads(raw)
+
+    def invoke(messages: List[Dict[str, str]]) -> str:
+        last_http_error: Optional[ProviderHttpError] = None
+
+        for current_model in models_to_try:
+            data = None
+            for attempt in range(max_retries + 1):
+                try:
+                    data = _request_once(messages, current_model)
+                    break
+                except ProviderHttpError as exc:
+                    last_http_error = exc
+                    should_retry = exc.status_code in retry_http_codes and attempt < max_retries
+                    if should_retry:
+                        time.sleep(retry_backoff_s * (2 ** attempt))
+                        continue
+                    break
+            if data is None:
+                continue
+
+            choices = data.get('choices', [])
+            if not isinstance(choices, list) or not choices:
+                raise ValueError('invalid openai-compatible response: choices missing')
+            first = choices[0]
+            if not isinstance(first, dict):
+                raise ValueError('invalid openai-compatible response: choice item invalid')
+            message = first.get('message', {})
+            if not isinstance(message, dict):
+                raise ValueError('invalid openai-compatible response: message invalid')
+            content = message.get('content', '')
+            if not isinstance(content, str):
+                raise ValueError('invalid openai-compatible response: content invalid')
+            return content
+
+        if last_http_error is not None:
+            if debug:
+                raise ValueError(f'HTTP {last_http_error.status_code}: {last_http_error.body}')
+            raise ValueError(
+                f'HTTP {last_http_error.status_code}: request failed (enable --provider-debug for details)'
+            )
+        raise ValueError('provider request failed without response')
+
+    return invoke
 
 
 def _mock_invoke_factory(model: str, *, mode: str) -> InvokeFn:
@@ -184,16 +280,17 @@ def _openai_compatible_invoke_factory(
     base_url: str,
     api_key: str,
     model: str,
-    fallback_models: list[str],
+    fallback_models: List[str],
     temperature: float,
     timeout_s: float,
     wire_api: str,
     debug: bool,
-    extra_headers: dict[str, str],
+    extra_headers: Dict[str, str],
     max_retries: int,
     retry_backoff_s: float,
-    retry_http_codes: set[int],
+    retry_http_codes: Set[int],
 ) -> InvokeFn:
+
     base = base_url.rstrip('/')
     if wire_api == 'responses':
         endpoint = base + '/responses'
@@ -206,7 +303,11 @@ def _openai_compatible_invoke_factory(
         if wire_api == 'responses':
             payload = {'model': current_model, 'input': prompt, 'temperature': temperature}
         else:
-            payload = {'model': current_model, 'messages': [{'role': 'user', 'content': prompt}], 'temperature': temperature}
+            payload = {
+                'model': current_model,
+                'messages': [{'role': 'user', 'content': prompt}],
+                'temperature': temperature,
+            }
         body = json.dumps(payload).encode('utf-8')
         headers = {
             'Content-Type': 'application/json',
@@ -229,7 +330,7 @@ def _openai_compatible_invoke_factory(
         return json.loads(raw)
 
     def invoke(prompt: str) -> str:
-        last_http_error: ProviderHttpError | None = None
+        last_http_error: Optional[ProviderHttpError ] = None
 
         for current_model in models_to_try:
             data = None
@@ -253,7 +354,7 @@ def _openai_compatible_invoke_factory(
                     return output_text
                 output = data.get('output', [])
                 if isinstance(output, list):
-                    fragments: list[str] = []
+                    fragments: List[str] = []
                     for item in output:
                         if not isinstance(item, dict):
                             continue
@@ -384,8 +485,8 @@ def build_invoke_from_args(args: argparse.Namespace, *, mode: str = 'json_loop')
     raise ValueError(f'unknown provider: {provider}')
 
 
-def parse_provider_headers(items: list[str]) -> dict[str, str]:
-    headers: dict[str, str] = {}
+def parse_provider_headers(items: List[str]) -> Dict[str, str]:
+    headers: Dict[str, str] = {}
     for item in items:
         if ':' not in item:
             raise ValueError('provider header must be Key:Value format')
@@ -396,3 +497,29 @@ def parse_provider_headers(items: list[str]) -> dict[str, str]:
             raise ValueError('provider header key must not be empty')
         headers[key] = value
     return headers
+
+
+# Provider registry for programmatic access
+_PROVIDER_REGISTRY = {
+    'mock': 'Mock provider for testing',
+    'openai_compatible': 'OpenAI-compatible API (OpenAI, Ollama, etc.)',
+    'anthropic': 'Anthropic Claude API',
+    'gemini': 'Google Gemini API',
+}
+
+
+def list_providers() -> dict[str, str]:
+    """List all available providers and their descriptions."""
+    return _PROVIDER_REGISTRY.copy()
+
+
+def get_provider(name: str) -> InvokeFn | None:
+    """Get a provider invoke function by name.
+    
+    Returns None if provider requires configuration (api_key, base_url, etc.)
+    """
+    if name == 'mock':
+        return _mock_invoke_factory('mock-model', mode='json')
+    # Other providers require configuration, return None
+    # Use build_invoke_from_args for full configuration
+    return None

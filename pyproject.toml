@@ -1,13 +1,45 @@
 [project]
 name = "LoopAgent"
 version = "0.1.0"
-description = "Enterprise-grade loop agent skeleton (stdlib-only core)."
+description = "Loop-oriented agent framework with a stdlib-only Python core."
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.10"
 license = { text = "MIT" }
+authors = [
+    { name = "LoopAgent Contributors" },
+]
+keywords = ["agent", "ai", "loop", "llm", "claude", "gemini", "openai"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Application Frameworks",
+]
+dependencies = []
+
+[project.optional-dependencies]
+browser = ["playwright"]
+all = ["playwright"]
+dev = []
+tui = ["textual>=0.86.2"]
+
+[project.scripts]
+loopagent = "loop_agent.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/t0ugh-sys/LoopAgent"
+Repository = "https://github.com/t0ugh-sys/LoopAgent"
+Issues = "https://github.com/t0ugh-sys/LoopAgent/issues"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+loop_agent = ["py.typed"]

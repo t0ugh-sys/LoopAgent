@@ -2,23 +2,49 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import urllib.error
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Dict, Iterable, List, Tuple
 
 from .agent_protocol import ToolCall, ToolResult
+from .policies import ToolPolicy
 
 
 @dataclass(frozen=True)
 class ToolContext:
     workspace_root: Path
+    policy: ToolPolicy = ToolPolicy.allow_all()
 
 
-ToolFn = Callable[[ToolContext, dict[str, object]], ToolResult]
+ToolFn = Callable[[ToolContext, Dict[str, object]], ToolResult]
+ToolDispatchMap = Dict[str, ToolFn]
+
+
+_SEARCH_SKIP_DIRS = {
+    '.git',
+    '.loopagent',
+    '.mypy_cache',
+    '.pytest_cache',
+    '.ruff_cache',
+    '.venv',
+    '__pycache__',
+    'build',
+    'dist',
+    'node_modules',
+}
+
+
+def _iter_searchable_files(workspace_root: Path) -> Iterable[Path]:
+    for current_root, dir_names, file_names in os.walk(workspace_root):
+        dir_names[:] = [name for name in dir_names if name not in _SEARCH_SKIP_DIRS]
+        root_path = Path(current_root)
+        for file_name in file_names:
+            yield root_path / file_name
 
 
 def _resolve_inside_workspace(workspace_root: Path, relative_path: str) -> Path:
@@ -29,7 +55,7 @@ def _resolve_inside_workspace(workspace_root: Path, relative_path: str) -> Path:
     return target
 
 
-def read_file_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
+def read_file_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
     path = str(args.get('path', ''))
     call_id = str(args.get('id', 'read_file'))
     try:
@@ -40,7 +66,7 @@ def read_file_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
-def write_file_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
+def write_file_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
     path = str(args.get('path', ''))
     content = str(args.get('content', ''))
     call_id = str(args.get('id', 'write_file'))
@@ -53,10 +79,10 @@ def write_file_tool(context: ToolContext, args: dict[str, object]) -> ToolResult
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
-def _split_patch_sections(patch_text: str) -> list[list[str]]:
+def _split_patch_sections(patch_text: str) -> List[List[str]]:
     lines = patch_text.replace('\r\n', '\n').split('\n')
-    sections: list[list[str]] = []
-    current: list[str] = []
+    sections: List[List[str]] = []
+    current: List[str] = []
     for line in lines:
         if line.startswith('*** ') and current:
             sections.append(current)
@@ -75,7 +101,7 @@ def _resolve_patch_target(context: ToolContext, header: str) -> Path:
     return _resolve_inside_workspace(context.workspace_root, raw)
 
 
-def _apply_update_hunks(origin: str, body_lines: list[str]) -> str:
+def _apply_update_hunks(origin: str, body_lines: List[str]) -> str:
     source_lines = origin.split('\n')
     cursor = 0
     index = 0
@@ -86,8 +112,8 @@ def _apply_update_hunks(origin: str, body_lines: list[str]) -> str:
             index += 1
             continue
         index += 1
-        old_chunk: list[str] = []
-        new_chunk: list[str] = []
+        old_chunk: List[str] = []
+        new_chunk: List[str] = []
         while index < len(body_lines):
             current = body_lines[index]
             if current.startswith('@@'):
@@ -128,7 +154,7 @@ def _apply_update_hunks(origin: str, body_lines: list[str]) -> str:
     return '\n'.join(source_lines)
 
 
-def apply_patch_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
+def apply_patch_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
     patch_text = str(args.get('patch', ''))
     call_id = str(args.get('id', 'apply_patch'))
     if not patch_text.strip():
@@ -144,7 +170,7 @@ def apply_patch_tool(context: ToolContext, args: dict[str, object]) -> ToolResul
             raise ValueError('patch body is empty')
 
         sections = _split_patch_sections(content)
-        changed: list[str] = []
+        changed: List[str] = []
         for section in sections:
             header = section[0]
             body = section[1:]
@@ -184,17 +210,15 @@ def apply_patch_tool(context: ToolContext, args: dict[str, object]) -> ToolResul
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
-def search_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
+def search_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
     pattern = str(args.get('pattern', '')).strip()
     call_id = str(args.get('id', 'search'))
     if not pattern:
         return ToolResult(id=call_id, ok=False, output='', error='pattern is required')
 
     try:
-        results: list[str] = []
-        for path in context.workspace_root.rglob('*'):
-            if not path.is_file():
-                continue
+        results: List[str] = []
+        for path in _iter_searchable_files(context.workspace_root):
             try:
                 text = path.read_text(encoding='utf-8')
             except Exception:
@@ -207,7 +231,7 @@ def search_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
-def run_command_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
+def run_command_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
     """Run a command in the workspace. 
     
     For security, prefer using 'cmd' (list) over 'command' (string with shell=True).
@@ -261,7 +285,7 @@ def run_command_tool(context: ToolContext, args: dict[str, object]) -> ToolResul
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
-def web_search_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
+def web_search_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
     """Search the web using DuckDuckGo HTML search (no API key required)."""
     query = str(args.get('query', '')).strip()
     call_id = str(args.get('id', 'web_search'))
@@ -282,8 +306,7 @@ def web_search_tool(context: ToolContext, args: dict[str, object]) -> ToolResult
             html = response.read().decode('utf-8', errors='replace')
         
         # Parse results from HTML
-        results: list[str] = []
-        import re
+        results: List[str] = []
         # Match result blocks
         pattern = r'<a rel="nofollow" class="result__a" href="([^"]+)"[^>]*>(.+?)</a>.*?<a class="result__snippet"[^>]*>(.+?)</a>'
         matches = re.findall(pattern, html, re.DOTALL)
@@ -303,7 +326,7 @@ def web_search_tool(context: ToolContext, args: dict[str, object]) -> ToolResult
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
-def fetch_url_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
+def fetch_url_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
     """Fetch content from a specific URL."""
     url = str(args.get('url', '')).strip()
     call_id = str(args.get('id', 'fetch_url'))
@@ -320,7 +343,6 @@ def fetch_url_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
             html = response.read().decode('utf-8', errors='replace')
         
         # Simple HTML to text conversion - remove scripts, styles, and tags
-        import re
         # Remove script and style elements
         text = re.sub(r'<script[^>]*>.*?</script>', '', html, flags=re.DOTALL | re.IGNORECASE)
         text = re.sub(r'<style[^>]*>.*?</style>', '', text, flags=re.DOTALL | re.IGNORECASE)
@@ -340,7 +362,7 @@ def fetch_url_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
-def analyze_memory_tool(context: ToolContext, args: dict[str, object]) -> ToolResult:
+def analyze_memory_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
     """Analyze past runs from memory store to learn patterns and insights.
     
     Args:
@@ -365,7 +387,7 @@ def analyze_memory_tool(context: ToolContext, args: dict[str, object]) -> ToolRe
         if not run_dirs:
             return ToolResult(id=call_id, ok=True, output='No past runs found in memory', error=None)
         
-        analysis: list[str] = []
+        analysis: List[str] = []
         total_runs = 0
         completed_runs = 0
         failed_runs = 0
@@ -419,23 +441,89 @@ def analyze_memory_tool(context: ToolContext, args: dict[str, object]) -> ToolRe
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
-def build_default_tools() -> dict[str, ToolFn]:
-    return {
-        'read_file': read_file_tool,
-        'write_file': write_file_tool,
-        'apply_patch': apply_patch_tool,
-        'search': search_tool,
-        'run_command': run_command_tool,
-        'web_search': web_search_tool,
-        'fetch_url': fetch_url_tool,
-        'analyze_memory': analyze_memory_tool,
-    }
+def register_tool_handler(dispatch_map: ToolDispatchMap, name: str, handler: ToolFn) -> ToolDispatchMap:
+    dispatch_map[name] = handler
+    return dispatch_map
 
 
-def execute_tool_call(context: ToolContext, tool_call: ToolCall, tools: dict[str, ToolFn]) -> ToolResult:
+def _build_tool_dispatch_map(registrations: Iterable[Tuple[str, ToolFn]]) -> ToolDispatchMap:
+    dispatch_map: ToolDispatchMap = {}
+    for name, handler in registrations:
+        register_tool_handler(dispatch_map, name, handler)
+    return dispatch_map
+
+
+def build_default_tools() -> ToolDispatchMap:
+    # Keep tool names stable; they become part of the agent's contract.
+    # Harness boundary: to expose a new tool to the model, add one handler and
+    # register it in this dispatch map. The loop itself does not need changes.
+    from .git_tools import (
+        git_branch_list_tool,
+        git_checkout_tool,
+        git_merge_and_push_tool,
+        git_merge_tool,
+        git_pull_tool,
+        git_push_tool,
+        git_status_tool,
+    )
+    from .github_tools import (
+        gh_auth_status_tool,
+        gh_issue_close_tool,
+        gh_issue_create_tool,
+        gh_issue_list_tool,
+        gh_pr_checks_tool,
+        gh_pr_comment_tool,
+        gh_pr_create_tool,
+        gh_pr_list_tool,
+        gh_pr_merge_tool,
+        gh_pr_view_tool,
+        gh_repo_clone_tool,
+        gh_repo_create_tool,
+        gh_repo_list_tool,
+    )
+
+    registrations: List[Tuple[str, ToolFn]] = [
+        ('read_file', read_file_tool),
+        ('write_file', write_file_tool),
+        ('apply_patch', apply_patch_tool),
+        ('search', search_tool),
+        ('run_command', run_command_tool),
+        ('web_search', web_search_tool),
+        ('fetch_url', fetch_url_tool),
+        ('analyze_memory', analyze_memory_tool),
+        # Git
+        ('git_status', git_status_tool),
+        ('git_branch_list', git_branch_list_tool),
+        ('git_checkout', git_checkout_tool),
+        ('git_pull', git_pull_tool),
+        ('git_merge', git_merge_tool),
+        ('git_merge_and_push', git_merge_and_push_tool),
+        ('git_push', git_push_tool),
+        # GitHub (via gh CLI)
+        ('gh_auth_status', gh_auth_status_tool),
+        ('gh_repo_list', gh_repo_list_tool),
+        ('gh_repo_create', gh_repo_create_tool),
+        ('gh_repo_clone', gh_repo_clone_tool),
+        ('gh_issue_list', gh_issue_list_tool),
+        ('gh_issue_create', gh_issue_create_tool),
+        ('gh_issue_close', gh_issue_close_tool),
+        ('gh_pr_list', gh_pr_list_tool),
+        ('gh_pr_create', gh_pr_create_tool),
+        ('gh_pr_view', gh_pr_view_tool),
+        ('gh_pr_checks', gh_pr_checks_tool),
+        ('gh_pr_comment', gh_pr_comment_tool),
+        ('gh_pr_merge', gh_pr_merge_tool),
+    ]
+    return _build_tool_dispatch_map(registrations)
+
+
+def execute_tool_call(context: ToolContext, tool_call: ToolCall, tools: ToolDispatchMap) -> ToolResult:
     tool = tools.get(tool_call.name)
     if tool is None:
         return ToolResult(id=tool_call.id, ok=False, output='', error=f'unknown tool: {tool_call.name}')
+    if not context.policy.allows_tool(tool_call.name):
+        denied = ', '.join(item.value for item in context.policy.denied_capabilities_for_tool(tool_call.name))
+        return ToolResult(id=tool_call.id, ok=False, output='', error=f'tool blocked by policy: {tool_call.name} ({denied})')
     args = dict(tool_call.arguments)
     args.setdefault('id', tool_call.id)
     return tool(context, args)
