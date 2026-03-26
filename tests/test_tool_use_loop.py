@@ -65,3 +65,34 @@ class ToolUseLoopTests(unittest.TestCase):
             self.assertEqual(tool_results[0]['ok'], True)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_append_thought_and_tool_history(self) -> None:
+        tmp_dir = Path('tests/.tmp') / f'tool-loop-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        target = tmp_dir / 'README.md'
+        target.write_text('hello', encoding='utf-8')
+        try:
+            def decider(goal, history, tool_results, state_summary, last_steps) -> str:
+                return (
+                    '{"thought":"inspect readme","plan":["read"],'
+                    '"tool_calls":[{"id":"call_1","name":"read_file","arguments":{"path":"README.md"}}],'
+                    '"final":"later"}'
+                )
+
+            step = make_tool_use_step(decider=decider, workspace_root=tmp_dir)
+            context = StepContext(
+                goal='x',
+                state=ToolUseState(history=('existing',)),
+                step_index=0,
+                started_at_s=0.0,
+                now_s=0.0,
+                history=tuple(),
+            )
+            result = step(context)
+
+            self.assertEqual(result.state.history[0], 'existing')
+            self.assertIn('thought: inspect readme', result.state.history)
+            self.assertIn('tool[call_1] ok', result.state.history)
+            self.assertEqual(result.metadata.get('tool_calls')[0]['name'], 'read_file')
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
