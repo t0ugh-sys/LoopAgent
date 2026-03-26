@@ -23,6 +23,7 @@ from . import ui
 from . import todo
 from . import task_store
 from . import compression
+from . import background
 
 __all__ = [
     'LoopAgent',
@@ -56,4 +57,5 @@ __all__ = [
     'todo',
     'task_store',
     'compression',
+    'background',
 ]

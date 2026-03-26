@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Tuple
 
 from .agent_protocol import ToolCall, ToolResult
+from .background import BackgroundCommandRunner
 from .compression import CompactManager
 from .policies import ToolPolicy
 from .todo import render_todo_lines
@@ -24,6 +25,7 @@ class ToolContext:
     todo_manager: Any = None
     skill_loader: Any = None
     compact_manager: CompactManager | None = None
+    background_runner: BackgroundCommandRunner | None = None
 
 
 ToolFn = Callable[[ToolContext, Dict[str, object]], ToolResult]
@@ -447,6 +449,18 @@ def analyze_memory_tool(context: ToolContext, args: Dict[str, object]) -> ToolRe
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
+def run_command_async_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
+    call_id = str(args.get('id', 'run_command_async'))
+    runner = context.background_runner
+    if runner is None:
+        return ToolResult(id=call_id, ok=False, output='', error='background runner is not configured')
+
+    cmd_list = args.get('cmd')
+    if not isinstance(cmd_list, list):
+        return ToolResult(id=call_id, ok=False, output='', error='cmd list is required')
+    return runner.spawn(command=[str(item) for item in cmd_list], call_id=call_id)
+
+
 def todo_write_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
     call_id = str(args.get('id', 'todo_write'))
     manager = context.todo_manager
@@ -520,6 +534,7 @@ def _builtin_core_tool_registrations() -> List[ToolRegistration]:
         ('apply_patch', apply_patch_tool),
         ('search', search_tool),
         ('run_command', run_command_tool),
+        ('run_command_async', run_command_async_tool),
         ('web_search', web_search_tool),
         ('fetch_url', fetch_url_tool),
         ('analyze_memory', analyze_memory_tool),

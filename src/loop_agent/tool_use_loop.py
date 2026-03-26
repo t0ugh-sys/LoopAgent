@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Callable, Dict, List, Optional, Tuple
 
 from .agent_protocol import ToolResult, parse_agent_step, render_agent_step_schema
+from .background import BackgroundCommandRunner
 from .compression import (
     CompactManager,
     CompressionConfig,
@@ -42,6 +43,7 @@ class ToolUseState:
     compaction_count: int = 0
     archived_transcripts: Tuple[str, ...] = tuple()
     last_compaction_reason: str = ''
+    background_notifications: Tuple[ToolResult, ...] = tuple()
 
 
 def build_tool_dispatch(
@@ -151,6 +153,7 @@ def _augment_state_summary(
     skills: Optional['SkillLoader'] = None,
     task_store: TaskStore | None = None,
     compression_config: CompressionConfig | None = None,
+    background_runner: BackgroundCommandRunner | None = None,
 ) -> Dict[str, object]:
     summary = dict(context.state_summary)
     summary['todo_state'] = _build_todo_state_summary(context.state, nag_after_rounds=nag_after_rounds)
@@ -169,6 +172,14 @@ def _augment_state_summary(
         ),
         'last_compaction_reason': context.state.last_compaction_reason,
     }
+    if background_runner is not None:
+        summary['background_tasks'] = [item.to_dict() for item in background_runner.snapshot()]
+    else:
+        summary['background_tasks'] = []
+    summary['notification_queue'] = [
+        {'id': item.id, 'ok': item.ok, 'output': item.output[:500], 'error': item.error}
+        for item in context.state.background_notifications
+    ]
     reminder = summary['todo_state'].get('reminder')
     if reminder:
         summary['todo_reminder'] = reminder
@@ -201,6 +212,43 @@ def _append_tool_history(
         status = 'ok' if item.ok else f'error={item.error}'
         updated_history.append(f'tool[{item.id}] {status}')
     return tuple(updated_history)
+
+
+def _apply_background_notifications(
+    state: ToolUseState,
+    notifications: Tuple[ToolResult, ...],
+) -> ToolUseState:
+    if not notifications:
+        return state
+
+    history = list(state.history)
+    transcript = list(state.transcript)
+    for item in notifications:
+        status = 'ok' if item.ok else f'error={item.error}'
+        history.append(f'notification[{item.id}] {status}')
+        content = item.output if item.ok else (item.error or item.output or 'background task error')
+        transcript.append(
+            TranscriptEntry(
+                kind='tool_result',
+                content=content[:4000],
+                tool_name='run_command_async',
+                call_id=item.id,
+                ok=item.ok,
+            )
+        )
+
+    return ToolUseState(
+        history=tuple(history),
+        tool_results=notifications,
+        todos=state.todos,
+        rounds_since_todo_update=state.rounds_since_todo_update,
+        transcript=tuple(transcript),
+        compact_summary=state.compact_summary,
+        compaction_count=state.compaction_count,
+        archived_transcripts=state.archived_transcripts,
+        last_compaction_reason=state.last_compaction_reason,
+        background_notifications=notifications,
+    )
 
 
 def _build_round_metadata(
@@ -275,6 +323,7 @@ def _compact_state_if_needed(
         compaction_count=state.compaction_count,
         archived_transcripts=state.archived_transcripts,
         last_compaction_reason=state.last_compaction_reason,
+        background_notifications=state.background_notifications,
     )
 
     estimated_tokens = estimate_tokens(
@@ -320,6 +369,7 @@ def _compact_state_if_needed(
         compaction_count=next_state.compaction_count + 1,
         archived_transcripts=tuple(archived_transcripts),
         last_compaction_reason=reason,
+        background_notifications=next_state.background_notifications,
     )
 
 
@@ -338,17 +388,31 @@ def execute_tool_use_round(
 ) -> StepResult[ToolUseState]:
     config = compression_config or CompressionConfig()
     config.validate()
+    background_runner = tool_context.background_runner
+    notifications = background_runner.drain_notifications() if background_runner is not None else tuple()
+    effective_state = _apply_background_notifications(context.state, notifications)
+    effective_context = StepContext(
+        goal=context.goal,
+        state=effective_state,
+        step_index=context.step_index,
+        started_at_s=context.started_at_s,
+        now_s=context.now_s,
+        history=context.history,
+        state_summary=context.state_summary,
+        last_steps=context.last_steps,
+    )
     augmented_state_summary = _augment_state_summary(
-        context,
+        effective_context,
         nag_after_rounds=nag_after_rounds,
         skills=skills,
         task_store=task_store,
         compression_config=config,
+        background_runner=background_runner,
     )
     todo_manager = TodoManager(
         TodoSnapshot(
-            items=context.state.todos,
-            rounds_since_update=context.state.rounds_since_todo_update,
+            items=effective_state.todos,
+            rounds_since_update=effective_state.rounds_since_todo_update,
         )
     )
     tool_context = ToolContext(
@@ -357,14 +421,15 @@ def execute_tool_use_round(
         todo_manager=todo_manager,
         skill_loader=skills,
         compact_manager=CompactManager(),
+        background_runner=background_runner,
     )
-    raw = _decide_next_step(decider, context, augmented_state_summary)
+    raw = _decide_next_step(decider, effective_context, augmented_state_summary)
     parsed = parse_agent_step(raw)
     if parsed is None:
         output = 'invalid agent step json. expected schema: ' + render_agent_step_schema()
         return StepResult(
             output=output,
-            state=context.state,
+            state=effective_state,
             done=False,
             metadata={'parse_error': True, 'raw_response': raw[:2000]},
         )
@@ -375,30 +440,31 @@ def execute_tool_use_round(
         tool_calls=parsed.tool_calls,
     )
     updated_history = _append_tool_history(
-        history=context.state.history,
+        history=effective_state.history,
         thought=parsed.thought,
         tool_results=executed,
     )
     updated_transcript = _append_transcript_entries(
-        context.state,
+        effective_state,
         thought=parsed.thought,
         tool_calls=parsed.tool_calls,
         tool_results=executed,
     )
-    todo_snapshot = todo_manager.snapshot(previous_rounds_since_update=context.state.rounds_since_todo_update)
+    todo_snapshot = todo_manager.snapshot(previous_rounds_since_update=effective_state.rounds_since_todo_update)
     draft_state = ToolUseState(
         history=updated_history,
         tool_results=tuple(executed),
         todos=todo_snapshot.items,
         rounds_since_todo_update=todo_snapshot.rounds_since_update,
         transcript=updated_transcript,
-        compact_summary=context.state.compact_summary,
-        compaction_count=context.state.compaction_count,
-        archived_transcripts=context.state.archived_transcripts,
-        last_compaction_reason=context.state.last_compaction_reason,
+        compact_summary=effective_state.compact_summary,
+        compaction_count=effective_state.compaction_count,
+        archived_transcripts=effective_state.archived_transcripts,
+        last_compaction_reason=effective_state.last_compaction_reason,
+        background_notifications=notifications,
     )
     compacted_state = _compact_state_if_needed(
-        goal=context.goal,
+        goal=effective_context.goal,
         state=draft_state,
         transcripts_dir=transcripts_dir,
         summarizer=summarizer,
@@ -407,7 +473,7 @@ def execute_tool_use_round(
     )
     new_state = compacted_state
     metadata = _build_round_metadata(
-        context=context,
+        context=effective_context,
         state_summary=augmented_state_summary,
         thought=parsed.thought,
         plan=parsed.plan,
@@ -422,6 +488,13 @@ def execute_tool_use_round(
         'recent_transcript': [entry.render_line() for entry in new_state.transcript[-config.recent_transcript_entries :]],
         'last_compaction_reason': new_state.last_compaction_reason,
     }
+    metadata['background_notifications'] = [
+        {'id': item.id, 'ok': item.ok, 'output': item.output[:500], 'error': item.error}
+        for item in notifications
+    ]
+    metadata['background_tasks'] = [
+        item.to_dict() for item in background_runner.snapshot()
+    ] if background_runner is not None else []
     if not metadata['has_tool_calls']:
         final = parsed.final or parsed.thought or 'done'
         return StepResult(output=final, state=new_state, done=True, metadata=metadata)
@@ -442,7 +515,11 @@ def make_tool_use_step(
     summarizer: SummarizerFn | None = None,
 ) -> Callable[[StepContext[ToolUseState]], StepResult[ToolUseState]]:
     dispatch_map = build_tool_dispatch(skills=skills, extra_tools=extra_tools)
-    tool_context = ToolContext(workspace_root=workspace_root, policy=policy)
+    tool_context = ToolContext(
+        workspace_root=workspace_root,
+        policy=policy,
+        background_runner=BackgroundCommandRunner(workspace_root),
+    )
 
     def step(context: StepContext[ToolUseState]) -> StepResult[ToolUseState]:
         return execute_tool_use_round(

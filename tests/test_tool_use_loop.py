@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import time
 import unittest
 import uuid
 from pathlib import Path
@@ -334,5 +335,58 @@ class ToolUseLoopTests(unittest.TestCase):
             self.assertFalse(result.done)
             self.assertEqual(result.state.compact_summary, 'manual summary')
             self.assertEqual(result.state.last_compaction_reason, 'manual checkpoint')
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_drain_background_notifications_before_decider(self) -> None:
+        tmp_dir = Path('tests/.tmp') / f'tool-loop-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        captured = {}
+        rounds = {'count': 0}
+        try:
+            def decider(goal, history, tool_results, state_summary, last_steps) -> str:
+                rounds['count'] += 1
+                captured['summary'] = state_summary
+                captured['tool_results'] = tool_results
+                if rounds['count'] == 1:
+                    return (
+                        '{"thought":"launch async","plan":["run"],'
+                        '"tool_calls":[{"id":"call_async","name":"run_command_async","arguments":{"cmd":["cmd","/c","echo async-ok"]}}],'
+                        '"final":"later"}'
+                    )
+                return '{"thought":"done now","plan":[],"tool_calls":[],"final":null}'
+
+            step = make_tool_use_step(decider=decider, workspace_root=tmp_dir)
+            context1 = StepContext(
+                goal='x',
+                state=ToolUseState(),
+                step_index=0,
+                started_at_s=0.0,
+                now_s=0.0,
+                history=tuple(),
+            )
+            result1 = step(context1)
+            self.assertFalse(result1.done)
+            self.assertEqual(result1.metadata['tool_calls'][0]['name'], 'run_command_async')
+
+            for _ in range(20):
+                time.sleep(0.05)
+                context2 = StepContext(
+                    goal='x',
+                    state=result1.state,
+                    step_index=1,
+                    started_at_s=0.0,
+                    now_s=0.1,
+                    history=('continue',),
+                )
+                result2 = step(context2)
+                notifications = result2.metadata.get('background_notifications', [])
+                if notifications:
+                    self.assertTrue(any('async-ok' in item.get('output', '') for item in notifications))
+                    self.assertTrue(any(item.get('id') == 'call_async' for item in notifications))
+                    self.assertTrue(captured['summary']['notification_queue'])
+                    return
+
+            self.fail('background notification was not delivered in time')
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
