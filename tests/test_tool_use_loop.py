@@ -1,0 +1,67 @@
+from __future__ import annotations
+
+import shutil
+import unittest
+import uuid
+from pathlib import Path
+
+import _bootstrap  # noqa: F401
+
+from loop_agent.core.types import StepContext
+from loop_agent.tool_use_loop import ToolUseState, make_tool_use_step
+
+
+class ToolUseLoopTests(unittest.TestCase):
+    def test_should_stop_when_model_has_no_tool_calls(self) -> None:
+        tmp_dir = Path('tests/.tmp') / f'tool-loop-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            def decider(goal, history, tool_results, state_summary, last_steps) -> str:
+                return '{"thought":"done now","plan":[],"tool_calls":[],"final":null}'
+
+            step = make_tool_use_step(decider=decider, workspace_root=tmp_dir)
+            context = StepContext(
+                goal='x',
+                state=ToolUseState(),
+                step_index=0,
+                started_at_s=0.0,
+                now_s=0.0,
+                history=tuple(),
+            )
+            result = step(context)
+            self.assertTrue(result.done)
+            self.assertEqual(result.output, 'done now')
+            self.assertFalse(result.metadata.get('has_tool_calls'))
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_execute_tool_and_continue(self) -> None:
+        tmp_dir = Path('tests/.tmp') / f'tool-loop-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        target = tmp_dir / 'README.md'
+        target.write_text('hello', encoding='utf-8')
+        try:
+            def decider(goal, history, tool_results, state_summary, last_steps) -> str:
+                return (
+                    '{"thought":"inspect","plan":["read"],'
+                    '"tool_calls":[{"id":"call_1","name":"read_file","arguments":{"path":"README.md"}}],'
+                    '"final":"later"}'
+                )
+
+            step = make_tool_use_step(decider=decider, workspace_root=tmp_dir)
+            context = StepContext(
+                goal='x',
+                state=ToolUseState(),
+                step_index=0,
+                started_at_s=0.0,
+                now_s=0.0,
+                history=tuple(),
+            )
+            result = step(context)
+            self.assertFalse(result.done)
+            self.assertEqual(result.output, 'continue')
+            self.assertTrue(result.metadata.get('has_tool_calls'))
+            tool_results = result.metadata.get('tool_results', [])
+            self.assertEqual(tool_results[0]['ok'], True)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)

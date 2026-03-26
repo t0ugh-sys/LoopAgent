@@ -17,6 +17,7 @@ from . import policies
 from . import worktree_manager
 from . import context_schema
 from . import scheduler
+from . import tool_use_loop
 
 __all__ = [
     'LoopAgent',
@@ -44,4 +45,5 @@ __all__ = [
     'worktree_manager',
     'context_schema',
     'scheduler',
+    'tool_use_loop',
 ]

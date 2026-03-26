@@ -1,9 +1,20 @@
 # LoopAgent
 
-LoopAgent is a loop-oriented agent framework with a stdlib-only Python core, a configurable LLM strategy layer, and a Node wrapper for users who prefer a global CLI entrypoint.
+LoopAgent is a tool-use feedback loop framework. The core pattern is:
+
+```text
+while model_is_calling_tools:
+    response = LLM(messages, tools)
+    execute tool calls
+    append tool results
+```
+
+Everything else in the project layers on top of that loop: policy, memory, hooks,
+task graphs, subagents, worktree isolation, and scheduling.
 
 ## Highlights
 
+- Tool-use feedback loop as the primary runtime model
 - Stdlib-only core in `src/loop_agent/`
 - Iterative agent loop with max-step, timeout, and cancellation stop conditions
 - Structured run artifacts in `.loopagent/runs/<run_id>/`
@@ -172,6 +183,7 @@ python -m loop_agent.agent_cli code --goal "search for info" --skill web_search 
 - `agents/`: guided learning-path scripts from minimal loop to team/subagent orchestration
 - `skills/`: built-in skill notes and extension references
 - `src/loop_agent/`: core package
+- `src/loop_agent/tool_use_loop.py`: the central model -> tools -> results loop
 - `tests/`: unit tests
 - `examples/`: optional demos and integrations
 - `bin/loopagent.js`: npm bridge entrypoint
