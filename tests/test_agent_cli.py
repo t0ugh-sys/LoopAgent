@@ -27,6 +27,15 @@ class AgentCliTests(unittest.TestCase):
         code_parser = build_parser()._subparsers._group_actions[0].choices['code']
         self.assertIn('tool-use feedback loop', code_parser.format_help())
 
+    def test_should_show_examples_and_groups_in_code_help(self) -> None:
+        code_parser = build_parser()._subparsers._group_actions[0].choices['code']
+        help_text = code_parser.format_help()
+        self.assertIn('Examples:', help_text)
+        self.assertIn('execution:', help_text)
+        self.assertIn('provider:', help_text)
+        self.assertIn('memory and artifacts:', help_text)
+        self.assertIn('tool dispatch:', help_text)
+
     def test_should_parse_doctor_subcommand(self) -> None:
         parser = build_parser()
         args = parser.parse_args(

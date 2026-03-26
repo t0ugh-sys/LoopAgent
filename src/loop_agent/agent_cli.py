@@ -214,6 +214,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog='agent_cli',
         description='Run LoopAgent as a tool-use feedback loop: model decides, tools execute, results feed back.',
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest='command', required=True)
 
@@ -221,42 +222,63 @@ def build_parser() -> argparse.ArgumentParser:
         'code',
         help='run the coding tool-use loop',
         description='Run the coding runtime as a tool-use feedback loop over a workspace.',
+        epilog=(
+            'Examples:\n'
+            '  agent_cli code --goal "inspect README then finish" --workspace . --provider mock --model mock-v3\n'
+            '  agent_cli code --goal-file goal.txt --workspace . --provider openai_compatible --model gpt-5.3-codex \\\n'
+            '    --base-url https://codex-api.packycode.com/v1 --wire-api responses --output json\n'
+            '  agent_cli code --goal "search docs then summarize" --workspace . --skill web_search --skill memory\n'
+            '  agent_cli code --goal "fix tests" --workspace . --observer-file events.jsonl --memory-dir .loopagent/runs\n'
+        ),
+        formatter_class=argparse.RawTextHelpFormatter,
     )
     goal_group = code.add_mutually_exclusive_group(required=True)
     goal_group.add_argument('--goal', help='Direct goal text for the tool-use loop')
     goal_group.add_argument('--goal-file', help='UTF-8 goal file for the tool-use loop')
-    code.add_argument('--workspace', default='.', help='Workspace root available to tools')
-    code.add_argument('--provider', choices=['mock', 'openai_compatible', 'anthropic', 'gemini'], default='mock')
-    code.add_argument('--model', default='mock-model')
-    code.add_argument('--base-url', default='')
-    code.add_argument('--wire-api', choices=['chat_completions', 'responses'], default='chat_completions')
-    code.add_argument('--api-key-env', default='OPENAI_API_KEY')
-    code.add_argument('--temperature', type=float, default=0.2)
-    code.add_argument('--provider-timeout-s', type=float, default=60.0)
-    code.add_argument('--provider-debug', action='store_true')
-    code.add_argument('--fallback-model', action='append', default=[])
-    code.add_argument('--max-retries', type=int, default=2)
-    code.add_argument('--retry-backoff-s', type=float, default=1.0)
-    code.add_argument('--retry-http-code', action='append', type=int, default=[])
-    code.add_argument(
+
+    execution_group = code.add_argument_group('execution')
+    execution_group.add_argument('--workspace', default='.', help='Workspace root available to tools')
+    execution_group.add_argument('--max-steps', type=int, default=12, help='Maximum tool-use rounds before stopping')
+    execution_group.add_argument('--timeout-s', type=float, default=120.0, help='Maximum elapsed seconds for the run')
+    execution_group.add_argument('--output', choices=['text', 'json'], default='text')
+    execution_group.add_argument('--include-history', action='store_true')
+
+    provider_group = code.add_argument_group('provider')
+    provider_group.add_argument(
+        '--provider',
+        choices=['mock', 'openai_compatible', 'anthropic', 'gemini'],
+        default='mock',
+    )
+    provider_group.add_argument('--model', default='mock-model')
+    provider_group.add_argument('--base-url', default='')
+    provider_group.add_argument('--wire-api', choices=['chat_completions', 'responses'], default='chat_completions')
+    provider_group.add_argument('--api-key-env', default='OPENAI_API_KEY')
+    provider_group.add_argument('--temperature', type=float, default=0.2)
+    provider_group.add_argument('--provider-timeout-s', type=float, default=60.0)
+    provider_group.add_argument('--provider-debug', action='store_true')
+    provider_group.add_argument('--fallback-model', action='append', default=[])
+    provider_group.add_argument('--max-retries', type=int, default=2)
+    provider_group.add_argument('--retry-backoff-s', type=float, default=1.0)
+    provider_group.add_argument('--retry-http-code', action='append', type=int, default=[])
+    provider_group.add_argument(
         '--provider-header',
         action='append',
         default=[],
         help='provider extra header Key:Value, repeatable',
     )
-    code.add_argument('--max-steps', type=int, default=12, help='Maximum tool-use rounds before stopping')
-    code.add_argument('--timeout-s', type=float, default=120.0, help='Maximum elapsed seconds for the run')
-    code.add_argument('--history-window', type=int, default=8, help='How many recent loop outputs to feed back')
-    code.add_argument('--observer-file', help='Write observer events as JSONL')
-    code.add_argument('--memory-dir', default='.loopagent/runs', help='Persistent memory root for run state')
-    code.add_argument('--run-id', help='Optional run id for memory and artifacts')
-    code.add_argument('--summarize-every', type=int, default=5, help='Refresh memory summary every N rounds')
-    code.add_argument('--record-run', action='store_true', default=True)
-    code.add_argument('--no-record-run', action='store_false', dest='record_run')
-    code.add_argument('--runs-dir', default='.loopagent/runs', help='Directory for structured run artifacts')
-    code.add_argument('--include-history', action='store_true')
-    code.add_argument('--output', choices=['text', 'json'], default='text')
-    code.add_argument(
+
+    memory_group = code.add_argument_group('memory and artifacts')
+    memory_group.add_argument('--history-window', type=int, default=8, help='How many recent loop outputs to feed back')
+    memory_group.add_argument('--observer-file', help='Write observer events as JSONL')
+    memory_group.add_argument('--memory-dir', default='.loopagent/runs', help='Persistent memory root for run state')
+    memory_group.add_argument('--run-id', help='Optional run id for memory and artifacts')
+    memory_group.add_argument('--summarize-every', type=int, default=5, help='Refresh memory summary every N rounds')
+    memory_group.add_argument('--record-run', action='store_true', default=True)
+    memory_group.add_argument('--no-record-run', action='store_false', dest='record_run')
+    memory_group.add_argument('--runs-dir', default='.loopagent/runs', help='Directory for structured run artifacts')
+
+    tool_group = code.add_argument_group('tool dispatch')
+    tool_group.add_argument(
         '--skill',
         action='append',
         default=[],
