@@ -8,6 +8,7 @@ from pathlib import Path
 import _bootstrap  # noqa: F401
 
 from loop_agent.core.types import StepContext
+from loop_agent.skills import SkillLoader
 from loop_agent.tool_use_loop import ToolUseState, make_tool_use_step
 from loop_agent.todo import TodoItem
 
@@ -156,5 +157,35 @@ class ToolUseLoopTests(unittest.TestCase):
             summary = captured['state_summary']
             self.assertIn('todo_state', summary)
             self.assertIn('todo_reminder', summary)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_inject_skill_metadata_without_full_body(self) -> None:
+        tmp_dir = Path('tests/.tmp') / f'tool-loop-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        captured = {}
+        try:
+            loader = SkillLoader()
+            self.assertTrue(loader.load('files'))
+
+            def decider(goal, history, tool_results, state_summary, last_steps) -> str:
+                captured['state_summary'] = state_summary
+                return '{"thought":"done now","plan":[],"tool_calls":[],"final":null}'
+
+            step = make_tool_use_step(decider=decider, workspace_root=tmp_dir, skills=loader)
+            context = StepContext(
+                goal='x',
+                state=ToolUseState(),
+                step_index=0,
+                started_at_s=0.0,
+                now_s=0.0,
+                history=tuple(),
+            )
+            step(context)
+
+            summary = captured['state_summary']
+            self.assertIn('available_skills', summary)
+            self.assertEqual(summary['available_skills'][0]['name'], 'files')
+            self.assertNotIn('read, write, patch', str(summary))
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)

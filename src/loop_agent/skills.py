@@ -16,6 +16,7 @@ Usage:
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any, Callable
 
 from loop_agent.agent_protocol import ToolResult
@@ -36,6 +37,10 @@ class Skill:
         """Return additional context for prompts."""
         return {}
 
+    def get_body(self) -> str:
+        """Return full skill instructions for on-demand loading."""
+        return ''
+
 
 # Built-in skills registry
 _SKILL_REGISTRY: dict[str, type[Skill]] = {}
@@ -44,6 +49,21 @@ _SKILL_REGISTRY: dict[str, type[Skill]] = {}
 def register_skill(skill_class: type[Skill]) -> None:
     """Register a skill class."""
     _SKILL_REGISTRY[skill_class.name] = skill_class
+
+
+def _skills_docs_root() -> Path:
+    return Path(__file__).resolve().parents[2] / 'skills'
+
+
+def _skill_doc_path(name: str) -> Path:
+    return _skills_docs_root() / f'{name}.md'
+
+
+def _read_skill_doc(name: str) -> str:
+    path = _skill_doc_path(name)
+    if not path.exists():
+        return ''
+    return path.read_text(encoding='utf-8').strip()
 
 
 def get_skill(name: str) -> Skill | None:
@@ -57,6 +77,13 @@ def get_skill(name: str) -> Skill | None:
 def list_skills() -> list[str]:
     """List all registered skills."""
     return list(_SKILL_REGISTRY.keys())
+
+
+def skill_metadata(name: str) -> dict[str, str] | None:
+    skill = get_skill(name)
+    if skill is None:
+        return None
+    return {'name': skill.name, 'description': skill.description}
 
 
 # ============== Built-in Skills ==============
@@ -201,6 +228,24 @@ class SkillLoader:
             ctx = skill.get_prompt_context()
             context.update(ctx)
         return context
+
+    def metadata(self) -> list[dict[str, str]]:
+        items: list[dict[str, str]] = []
+        for skill in self._loaded_skills.values():
+            items.append({'name': skill.name, 'description': skill.description})
+        return items
+
+    def load_body(self, name: str) -> str | None:
+        skill = self._loaded_skills.get(name)
+        if skill is None:
+            return None
+        body = _read_skill_doc(name)
+        if body:
+            return body
+        generated = skill.get_body().strip()
+        if generated:
+            return generated
+        return f'# {skill.name}\n\n{skill.description}'
     
     def list_loaded(self) -> list[str]:
         """List loaded skill names."""

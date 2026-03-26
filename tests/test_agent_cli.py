@@ -5,13 +5,36 @@ import unittest
 import uuid
 import json
 from pathlib import Path
+from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.agent_cli import _run_code_command, build_parser
+from loop_agent.agent_cli import _build_coding_decider, _run_code_command, build_parser
+from loop_agent.skills import SkillLoader
 
 
 class AgentCliTests(unittest.TestCase):
+    def test_should_only_include_skill_metadata_in_prompt(self) -> None:
+        loader = SkillLoader()
+        self.assertTrue(loader.load('files'))
+        captured = {}
+
+        def fake_invoke(prompt: str) -> str:
+            captured['prompt'] = prompt
+            return '{"thought":"done","plan":[],"tool_calls":[],"final":"done"}'
+
+        parser = build_parser()
+        args = parser.parse_args(['code', '--goal', 'x', '--provider', 'mock', '--model', 'mock-v3'])
+
+        with patch('loop_agent.agent_cli.build_invoke_from_args', return_value=fake_invoke):
+            decider = _build_coding_decider(args, loader)
+            decider('goal', tuple(), tuple(), {}, tuple())
+
+        prompt = captured['prompt']
+        self.assertIn('Available skills:', prompt)
+        self.assertIn('- files: Read, write, and search files', prompt)
+        self.assertNotIn('# LoopAgent Skills', prompt)
+
     def test_should_describe_tool_use_loop_in_root_help(self) -> None:
         parser = build_parser()
         help_text = parser.format_help()

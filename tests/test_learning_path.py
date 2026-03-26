@@ -27,6 +27,8 @@ class LearningPathTests(unittest.TestCase):
         readme = (root / 'README.md').read_text(encoding='utf-8')
         self.assertIn('agents/', readme)
         self.assertIn('skills/', readme)
+        self.assertIn('todo_write', readme)
+        self.assertIn('todo_reminder', readme)
         self.assertTrue((root / 'docs' / 'repo-layout.md').exists())
         self.assertTrue((root / 'skills' / 'README.md').exists())
 

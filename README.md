@@ -99,6 +99,46 @@ python -m loop_agent.agent_cli code --help
 python -m loop_agent.agent_cli tools
 ```
 
+## Visible Progress
+
+LoopAgent can keep a visible todo list inside the same tool-use loop.
+
+- The model updates progress through the `todo_write` tool
+- The runtime stores todo state in `ToolUseState`
+- The current todo list is injected back into `state_summary.todo_state`
+- If open todos are not updated for 3 rounds, the runtime injects `todo_reminder`
+
+Minimal tool payload:
+
+```json
+{
+  "thought": "track progress",
+  "plan": ["inspect repo", "edit file"],
+  "tool_calls": [
+    {
+      "id": "call_1",
+      "name": "todo_write",
+      "arguments": {
+        "items": [
+          {"id": "t1", "content": "inspect repo", "status": "completed"},
+          {"id": "t2", "content": "edit file", "status": "in_progress"}
+        ]
+      }
+    }
+  ],
+  "final": null
+}
+```
+
+Typical event metadata now includes:
+
+```text
+todo_state.items
+todo_state.lines
+todo_state.rounds_since_update
+todo_reminder
+```
+
 ### Conda example
 
 ```powershell
@@ -202,6 +242,11 @@ Built-in skills:
 | `files` | Read, write, patch, and search files | none |
 | `commands` | Run shell commands | none |
 | `browser` | Browser automation | `playwright` |
+
+LoopAgent uses two-layer skill injection:
+
+- Layer 1: only skill `name + description` goes into the prompt
+- Layer 2: full skill instructions are loaded on demand through `load_skill`
 
 Load specific skills:
 

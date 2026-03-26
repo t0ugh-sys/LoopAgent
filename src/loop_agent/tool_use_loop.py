@@ -78,12 +78,15 @@ def _augment_state_summary(
     context: StepContext[ToolUseState],
     *,
     nag_after_rounds: int,
+    skills: Optional['SkillLoader'] = None,
 ) -> Dict[str, object]:
     summary = dict(context.state_summary)
     summary['todo_state'] = _build_todo_state_summary(context.state, nag_after_rounds=nag_after_rounds)
     reminder = summary['todo_state'].get('reminder')
     if reminder:
         summary['todo_reminder'] = reminder
+    if skills is not None:
+        summary['available_skills'] = skills.metadata()
     return summary
 
 
@@ -146,8 +149,9 @@ def execute_tool_use_round(
     tool_context: ToolContext,
     dispatch_map: ToolDispatchMap,
     nag_after_rounds: int = 3,
+    skills: Optional['SkillLoader'] = None,
 ) -> StepResult[ToolUseState]:
-    augmented_state_summary = _augment_state_summary(context, nag_after_rounds=nag_after_rounds)
+    augmented_state_summary = _augment_state_summary(context, nag_after_rounds=nag_after_rounds, skills=skills)
     todo_manager = TodoManager(
         TodoSnapshot(
             items=context.state.todos,
@@ -158,6 +162,7 @@ def execute_tool_use_round(
         workspace_root=tool_context.workspace_root,
         policy=tool_context.policy,
         todo_manager=todo_manager,
+        skill_loader=skills,
     )
     raw = _decide_next_step(decider, context, augmented_state_summary)
     parsed = parse_agent_step(raw)
@@ -221,6 +226,7 @@ def make_tool_use_step(
             tool_context=tool_context,
             dispatch_map=dispatch_map,
             nag_after_rounds=todo_nag_after_rounds,
+            skills=skills,
         )
 
     return step

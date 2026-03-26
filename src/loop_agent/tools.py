@@ -21,6 +21,7 @@ class ToolContext:
     workspace_root: Path
     policy: ToolPolicy = ToolPolicy.allow_all()
     todo_manager: Any = None
+    skill_loader: Any = None
 
 
 ToolFn = Callable[[ToolContext, Dict[str, object]], ToolResult]
@@ -465,6 +466,22 @@ def todo_write_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
+def load_skill_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
+    call_id = str(args.get('id', 'load_skill'))
+    loader = context.skill_loader
+    if loader is None:
+        return ToolResult(id=call_id, ok=False, output='', error='skill loader is not configured')
+
+    name = str(args.get('name', '')).strip()
+    if not name:
+        return ToolResult(id=call_id, ok=False, output='', error='skill name is required')
+
+    body = loader.load_body(name)
+    if body is None:
+        return ToolResult(id=call_id, ok=False, output='', error=f'skill not loaded: {name}')
+    return ToolResult(id=call_id, ok=True, output=f'<skill name=\"{name}\">\n{body}\n</skill>')
+
+
 def register_tool_handler(dispatch_map: ToolDispatchMap, name: str, handler: ToolFn) -> ToolDispatchMap:
     dispatch_map[name] = handler
     return dispatch_map
@@ -479,6 +496,7 @@ def _build_tool_dispatch_map(registrations: Iterable[ToolRegistration]) -> ToolD
 
 def _builtin_core_tool_registrations() -> List[ToolRegistration]:
     return [
+        ('load_skill', load_skill_tool),
         ('todo_write', todo_write_tool),
         ('read_file', read_file_tool),
         ('write_file', write_file_tool),

@@ -30,7 +30,7 @@ def _resolve_goal(args: argparse.Namespace) -> str:
     return args.goal.strip()
 
 
-def _build_coding_decider(args: argparse.Namespace):
+def _build_coding_decider(args: argparse.Namespace, skills: SkillLoader | None = None):
     invoke = build_invoke_from_args(args, mode='coding')
 
     def decider(
@@ -41,9 +41,15 @@ def _build_coding_decider(args: argparse.Namespace):
         last_steps: Tuple[str, ...],
     ) -> str:
         history_window = max(1, args.history_window)
+        skill_lines: List[str] = []
+        if skills is not None:
+            for item in skills.metadata():
+                skill_lines.append(f'- {item["name"]}: {item["description"]}')
         prompt = (
             'You are a coding agent. Return strict JSON matching schema.\n'
             'Use tools when needed. Keep a visible todo list updated via the todo_write tool when progress changes.\n'
+            + ('Available skills:\n' + '\n'.join(skill_lines) + '\n' if skill_lines else '')
+            + 'Do not inline full skill instructions in the prompt. Load them on demand with load_skill.\n'
             + render_agent_step_schema()
             + '\nGoal:\n'
             + goal
@@ -124,8 +130,8 @@ def _run_code_command(args: argparse.Namespace) -> int:
         context = memory_store.load_context(goal=goal, last_k_steps=args.history_window)
         return ContextSnapshot(state_summary=context.state_summary, last_steps=context.last_steps)
 
-    decider = _build_coding_decider(args)
     skills = _load_skills_from_args(args)
+    decider = _build_coding_decider(args, skills)
     result = run_coding_agent(
         goal=goal,
         decider=decider,
