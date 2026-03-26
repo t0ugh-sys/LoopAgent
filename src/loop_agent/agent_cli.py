@@ -211,14 +211,21 @@ def _run_doctor_command(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog='agent_cli')
+    parser = argparse.ArgumentParser(
+        prog='agent_cli',
+        description='Run LoopAgent as a tool-use feedback loop: model decides, tools execute, results feed back.',
+    )
     subparsers = parser.add_subparsers(dest='command', required=True)
 
-    code = subparsers.add_parser('code', help='run coding agent loop')
+    code = subparsers.add_parser(
+        'code',
+        help='run the coding tool-use loop',
+        description='Run the coding runtime as a tool-use feedback loop over a workspace.',
+    )
     goal_group = code.add_mutually_exclusive_group(required=True)
-    goal_group.add_argument('--goal')
-    goal_group.add_argument('--goal-file')
-    code.add_argument('--workspace', default='.')
+    goal_group.add_argument('--goal', help='Direct goal text for the tool-use loop')
+    goal_group.add_argument('--goal-file', help='UTF-8 goal file for the tool-use loop')
+    code.add_argument('--workspace', default='.', help='Workspace root available to tools')
     code.add_argument('--provider', choices=['mock', 'openai_compatible', 'anthropic', 'gemini'], default='mock')
     code.add_argument('--model', default='mock-model')
     code.add_argument('--base-url', default='')
@@ -237,16 +244,16 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help='provider extra header Key:Value, repeatable',
     )
-    code.add_argument('--max-steps', type=int, default=12)
-    code.add_argument('--timeout-s', type=float, default=120.0)
-    code.add_argument('--history-window', type=int, default=8)
-    code.add_argument('--observer-file')
-    code.add_argument('--memory-dir', default='.loopagent/runs')
-    code.add_argument('--run-id')
-    code.add_argument('--summarize-every', type=int, default=5)
+    code.add_argument('--max-steps', type=int, default=12, help='Maximum tool-use rounds before stopping')
+    code.add_argument('--timeout-s', type=float, default=120.0, help='Maximum elapsed seconds for the run')
+    code.add_argument('--history-window', type=int, default=8, help='How many recent loop outputs to feed back')
+    code.add_argument('--observer-file', help='Write observer events as JSONL')
+    code.add_argument('--memory-dir', default='.loopagent/runs', help='Persistent memory root for run state')
+    code.add_argument('--run-id', help='Optional run id for memory and artifacts')
+    code.add_argument('--summarize-every', type=int, default=5, help='Refresh memory summary every N rounds')
     code.add_argument('--record-run', action='store_true', default=True)
     code.add_argument('--no-record-run', action='store_false', dest='record_run')
-    code.add_argument('--runs-dir', default='.loopagent/runs')
+    code.add_argument('--runs-dir', default='.loopagent/runs', help='Directory for structured run artifacts')
     code.add_argument('--include-history', action='store_true')
     code.add_argument('--output', choices=['text', 'json'], default='text')
     code.add_argument(
@@ -254,20 +261,36 @@ def build_parser() -> argparse.ArgumentParser:
         action='append',
         default=[],
         dest='skills',
-        help='Skills to load (web_search, memory, files, commands, browser, or "all")',
+        help='Skills to load into the tool dispatch (web_search, memory, files, commands, browser, or "all")',
     )
 
-    tools = subparsers.add_parser('tools', help='list available tools')
+    tools = subparsers.add_parser(
+        'tools',
+        help='list tools exposed to the loop',
+        description='List tool handlers available to the coding tool-use loop.',
+    )
     tools.set_defaults(handler=_run_tools_command)
 
-    skills_parser = subparsers.add_parser('skills', help='list available skills')
+    skills_parser = subparsers.add_parser(
+        'skills',
+        help='list available skills',
+        description='List optional skills that can extend the loop tool dispatch.',
+    )
     skills_parser.set_defaults(handler=_run_skills_command)
 
-    replay = subparsers.add_parser('replay', help='print events jsonl')
+    replay = subparsers.add_parser(
+        'replay',
+        help='print recorded loop events',
+        description='Print a recorded JSONL event stream for a previous tool-use run.',
+    )
     replay.add_argument('--events-file', required=True)
     replay.set_defaults(handler=_run_replay_command)
 
-    doctor = subparsers.add_parser('doctor', help='diagnose provider connectivity and gateway status')
+    doctor = subparsers.add_parser(
+        'doctor',
+        help='diagnose provider connectivity',
+        description='Diagnose provider connectivity before running the tool-use loop.',
+    )
     doctor.add_argument('--provider', choices=['openai_compatible'], default='openai_compatible')
     doctor.add_argument('--model', default='gpt-5.3-codex')
     doctor.add_argument('--base-url', required=True)

@@ -12,10 +12,20 @@ from loop_agent.agent_cli import _run_code_command, build_parser
 
 
 class AgentCliTests(unittest.TestCase):
+    def test_should_describe_tool_use_loop_in_root_help(self) -> None:
+        parser = build_parser()
+        help_text = parser.format_help()
+        self.assertIn('tool-use feedback loop', help_text)
+
     def test_should_list_tools_subcommand(self) -> None:
         parser = build_parser()
         args = parser.parse_args(['tools'])
         self.assertEqual(args.command, 'tools')
+
+    def test_should_describe_tool_use_loop_in_code_help(self) -> None:
+        parser = build_parser()
+        code_parser = build_parser()._subparsers._group_actions[0].choices['code']
+        self.assertIn('tool-use feedback loop', code_parser.format_help())
 
     def test_should_parse_doctor_subcommand(self) -> None:
         parser = build_parser()

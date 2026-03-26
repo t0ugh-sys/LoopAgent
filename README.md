@@ -68,6 +68,20 @@ python -m loop_agent.agent_cli tools
 python -m loop_agent.agent_cli code --goal "inspect README then finish" --workspace . --provider mock --model mock-v3 --output json
 ```
 
+The `agent_cli` entrypoint is the direct CLI surface of the core loop:
+
+```text
+model decides -> tool calls execute -> tool results feed back -> stop or continue
+```
+
+Useful first commands:
+
+```bash
+python -m loop_agent.agent_cli --help
+python -m loop_agent.agent_cli code --help
+python -m loop_agent.agent_cli tools
+```
+
 ### Conda example
 
 ```powershell
