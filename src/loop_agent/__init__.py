@@ -21,6 +21,7 @@ from . import tool_use_loop
 from . import ops
 from . import ui
 from . import todo
+from . import task_store
 
 __all__ = [
     'LoopAgent',
@@ -52,4 +53,5 @@ __all__ = [
     'ops',
     'ui',
     'todo',
+    'task_store',
 ]

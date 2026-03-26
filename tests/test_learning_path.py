@@ -17,6 +17,7 @@ class LearningPathTests(unittest.TestCase):
             root / 'agents' / 's04_skills.py',
             root / 'agents' / 's05_coding.py',
             root / 'agents' / 's06_team.py',
+            root / 'agents' / 's07_task_system.py',
             root / 'agents' / 's_full.py',
         ]
         for path in expected:
