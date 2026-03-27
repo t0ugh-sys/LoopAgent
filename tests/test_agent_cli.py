@@ -75,6 +75,40 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(args.command, 'doctor')
         self.assertEqual(args.base_url, 'https://example.com/v1')
 
+    def test_should_parse_team_run_subcommand(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(
+            [
+                'team',
+                'run',
+                '--workspace',
+                '.',
+                '--teammate',
+                'alice:coder',
+                '--message',
+                'alice=fix bug',
+                '--provider',
+                'mock',
+                '--model',
+                'mock-v3',
+                '--output',
+                'json',
+            ]
+        )
+        self.assertEqual(args.command, 'team')
+        self.assertEqual(args.team_command, 'run')
+        self.assertEqual(args.teammate, ['alice:coder'])
+        self.assertEqual(args.message, ['alice=fix bug'])
+
+    def test_should_parse_team_send_subcommand(self) -> None:
+        parser = build_parser()
+        args = parser.parse_args(
+            ['team', 'send', '--workspace', '.', '--to', 'alice', '--message', 'fix bug']
+        )
+        self.assertEqual(args.command, 'team')
+        self.assertEqual(args.team_command, 'send')
+        self.assertEqual(args.to, 'alice')
+
     def test_should_run_code_with_mock_provider(self) -> None:
         parser = build_parser()
         tmp_dir = Path('tests/.tmp') / f'ocli-{uuid.uuid4().hex}'
@@ -209,6 +243,40 @@ class AgentCliTests(unittest.TestCase):
             )
             _run_code_command(args)
             self.assertTrue((tmp_dir / '.tasks').exists())
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_run_team_runtime_with_mock_provider(self) -> None:
+        parser = build_parser()
+        tmp_dir = Path('tests/.tmp') / f'team-cli-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        (tmp_dir / 'README.md').write_text('hello', encoding='utf-8')
+        try:
+            args = parser.parse_args(
+                [
+                    'team',
+                    'run',
+                    '--workspace',
+                    str(tmp_dir),
+                    '--teammate',
+                    'alice:coder',
+                    '--message',
+                    'alice=inspect README',
+                    '--provider',
+                    'mock',
+                    '--model',
+                    'mock-v3',
+                    '--output',
+                    'json',
+                    '--service-timeout-s',
+                    '2',
+                ]
+            )
+            with patch('sys.stdout'):
+                exit_code = args.handler(args)
+            self.assertEqual(exit_code, 0)
+            self.assertTrue((tmp_dir / '.team' / 'config.json').exists())
+            self.assertTrue((tmp_dir / '.team' / 'inbox' / 'alice.jsonl').exists())
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 

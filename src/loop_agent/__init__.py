@@ -24,6 +24,7 @@ from . import todo
 from . import task_store
 from . import compression
 from . import background
+from . import team_runtime
 
 __all__ = [
     'LoopAgent',
@@ -58,4 +59,5 @@ __all__ = [
     'task_store',
     'compression',
     'background',
+    'team_runtime',
 ]

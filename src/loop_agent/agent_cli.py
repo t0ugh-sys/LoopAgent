@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 import sys
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -19,6 +20,7 @@ from .ops.doctor import format_doctor_report, run_provider_doctor
 from .run_recorder import RunRecorder
 from .skills import SkillLoader, list_skills, get_skill
 from .task_store import TaskStore
+from .team_runtime import PersistentTeamRuntime, PersistentTeammateSpec
 from .tools import build_default_tools
 
 
@@ -211,6 +213,118 @@ def _run_code_command(args: argparse.Namespace) -> int:
     return 0 if result.done else 1
 
 
+def _parse_teammate(value: str) -> Tuple[str, str]:
+    raw = value.strip()
+    if ':' not in raw:
+        raise ValueError('teammate must be NAME:ROLE')
+    name, role = raw.split(':', 1)
+    name = name.strip()
+    role = role.strip()
+    if not name or not role:
+        raise ValueError('teammate must be NAME:ROLE')
+    return name, role
+
+
+def _parse_team_message(value: str) -> Tuple[str, str]:
+    raw = value.strip()
+    if '=' not in raw:
+        raise ValueError('message must be TARGET=BODY')
+    target, body = raw.split('=', 1)
+    target = target.strip()
+    body = body.strip()
+    if not target or not body:
+        raise ValueError('message must be TARGET=BODY')
+    return target, body
+
+
+def _run_team_run_command(args: argparse.Namespace) -> int:
+    workspace_root = Path(args.workspace).resolve()
+    team_root = (workspace_root / args.team_dir).resolve()
+    runtime = PersistentTeamRuntime(team_root)
+    decider = _build_coding_decider(args, _load_skills_from_args(args))
+    teammate_specs: List[PersistentTeammateSpec] = []
+    for item in args.teammate:
+        name, role = _parse_teammate(item)
+        teammate_specs.append(
+            PersistentTeammateSpec(
+                name=name,
+                role=role,
+                workspace_root=workspace_root,
+                decider=decider,
+                stop=StopConfig(max_steps=args.max_steps, max_elapsed_s=args.timeout_s),
+                skills=tuple(args.skills),
+            )
+        )
+
+    for spec in teammate_specs:
+        runtime.spawn_teammate(spec)
+
+    expected_replies = 0
+    for item in args.message:
+        recipient, body = _parse_team_message(item)
+        runtime.send_message(recipient, body, sender=args.sender)
+        expected_replies += 1
+    for body in args.broadcast:
+        runtime.broadcast(body, sender=args.sender)
+        expected_replies += len(teammate_specs)
+
+    replies: List[Dict[str, Any]] = []
+    deadline = datetime.now(timezone.utc).timestamp() + args.service_timeout_s
+    try:
+        while datetime.now(timezone.utc).timestamp() < deadline:
+            inbox = runtime.inbox_store.drain(args.sender)
+            for item in inbox:
+                replies.append(item.to_dict())
+            if expected_replies > 0 and len(replies) >= expected_replies:
+                break
+            if expected_replies == 0:
+                break
+            time.sleep(args.poll_interval_s)
+    finally:
+        runtime.shutdown_all(sender=args.sender, timeout_s=min(5.0, args.service_timeout_s))
+
+    payload = {
+        'team_dir': str(team_root),
+        'members': [member.to_dict() for member in runtime.config_store.load().members],
+        'replies': replies,
+    }
+    if args.output == 'json':
+        print(json.dumps(payload, ensure_ascii=False))
+    else:
+        print(f'team_dir: {team_root}')
+        print(f'members: {[member["name"] for member in payload["members"]]}')
+        for reply in replies:
+            print(f'{reply["sender"]} -> {reply["recipient"]}: {reply["body"]}')
+    return 0
+
+
+def _run_team_send_command(args: argparse.Namespace) -> int:
+    workspace_root = Path(args.workspace).resolve()
+    runtime = PersistentTeamRuntime((workspace_root / args.team_dir).resolve())
+    runtime.send_message(args.to, args.message, sender=args.sender)
+    print('ok')
+    return 0
+
+
+def _run_team_broadcast_command(args: argparse.Namespace) -> int:
+    workspace_root = Path(args.workspace).resolve()
+    runtime = PersistentTeamRuntime((workspace_root / args.team_dir).resolve())
+    runtime.broadcast(args.message, sender=args.sender)
+    print('ok')
+    return 0
+
+
+def _run_team_shutdown_command(args: argparse.Namespace) -> int:
+    workspace_root = Path(args.workspace).resolve()
+    runtime = PersistentTeamRuntime((workspace_root / args.team_dir).resolve())
+    if args.all:
+        runtime.shutdown_all(sender=args.sender, timeout_s=args.timeout_s)
+    else:
+        runtime.shutdown_teammate(args.to, sender=args.sender)
+    print('ok')
+    return 0
+
+
 def _run_tools_command(_: argparse.Namespace) -> int:
     names = sorted(build_default_tools().keys())
     print('\n'.join(names))
@@ -358,6 +472,75 @@ def build_parser() -> argparse.ArgumentParser:
     )
     replay.add_argument('--events-file', required=True)
     replay.set_defaults(handler=_run_replay_command)
+
+    team = subparsers.add_parser(
+        'team',
+        help='run or control persistent teammates',
+        description='Manage persistent teammate loops backed by .team/config.json and .team/inbox/*.jsonl',
+    )
+    team_subparsers = team.add_subparsers(dest='team_command', required=True)
+
+    team_run = team_subparsers.add_parser(
+        'run',
+        help='start teammate loops in the current process',
+        description='Spawn persistent teammates, deliver messages, and keep threads alive until idle or timeout.',
+    )
+    team_run.add_argument('--workspace', default='.', help='Workspace root for teammate execution')
+    team_run.add_argument('--team-dir', default='.team', help='Workspace-relative team runtime directory')
+    team_run.add_argument('--teammate', action='append', default=[], required=True, help='Teammate in NAME:ROLE format')
+    team_run.add_argument('--message', action='append', default=[], help='Send startup message TARGET=BODY')
+    team_run.add_argument('--broadcast', action='append', default=[], help='Broadcast startup message to all teammates')
+    team_run.add_argument('--sender', default='lead')
+    team_run.add_argument('--service-timeout-s', type=float, default=5.0)
+    team_run.add_argument('--poll-interval-s', type=float, default=0.05)
+    team_run.add_argument('--output', choices=['text', 'json'], default='text')
+    team_run.add_argument('--max-steps', type=int, default=12)
+    team_run.add_argument('--timeout-s', type=float, default=120.0)
+    team_run.add_argument(
+        '--provider',
+        choices=['mock', 'openai_compatible', 'anthropic', 'gemini'],
+        default='mock',
+    )
+    team_run.add_argument('--model', default='mock-model')
+    team_run.add_argument('--base-url', default='')
+    team_run.add_argument('--wire-api', choices=['chat_completions', 'responses'], default='chat_completions')
+    team_run.add_argument('--api-key-env', default='OPENAI_API_KEY')
+    team_run.add_argument('--temperature', type=float, default=0.2)
+    team_run.add_argument('--provider-timeout-s', type=float, default=60.0)
+    team_run.add_argument('--provider-debug', action='store_true')
+    team_run.add_argument('--fallback-model', action='append', default=[])
+    team_run.add_argument('--max-retries', type=int, default=2)
+    team_run.add_argument('--retry-backoff-s', type=float, default=1.0)
+    team_run.add_argument('--retry-http-code', action='append', type=int, default=[])
+    team_run.add_argument('--provider-header', action='append', default=[])
+    team_run.add_argument('--history-window', type=int, default=8)
+    team_run.add_argument('--skill', action='append', default=[], dest='skills')
+    team_run.set_defaults(handler=_run_team_run_command)
+
+    team_send = team_subparsers.add_parser('send', help='append one message to a teammate inbox')
+    team_send.add_argument('--workspace', default='.')
+    team_send.add_argument('--team-dir', default='.team')
+    team_send.add_argument('--to', required=True)
+    team_send.add_argument('--message', required=True)
+    team_send.add_argument('--sender', default='lead')
+    team_send.set_defaults(handler=_run_team_send_command)
+
+    team_broadcast = team_subparsers.add_parser('broadcast', help='append one broadcast message to all teammate inboxes')
+    team_broadcast.add_argument('--workspace', default='.')
+    team_broadcast.add_argument('--team-dir', default='.team')
+    team_broadcast.add_argument('--message', required=True)
+    team_broadcast.add_argument('--sender', default='lead')
+    team_broadcast.set_defaults(handler=_run_team_broadcast_command)
+
+    team_shutdown = team_subparsers.add_parser('shutdown', help='request teammate shutdown')
+    team_shutdown.add_argument('--workspace', default='.')
+    team_shutdown.add_argument('--team-dir', default='.team')
+    team_shutdown.add_argument('--sender', default='lead')
+    team_shutdown.add_argument('--timeout-s', type=float, default=5.0)
+    target_group = team_shutdown.add_mutually_exclusive_group(required=True)
+    target_group.add_argument('--to')
+    target_group.add_argument('--all', action='store_true')
+    team_shutdown.set_defaults(handler=_run_team_shutdown_command)
 
     doctor = subparsers.add_parser(
         'doctor',
