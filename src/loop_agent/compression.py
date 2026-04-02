@@ -60,8 +60,32 @@ class CompactConfig:
     max_tokens_per_file: int = 5000
 
 
-# Backward compatibility alias (must be after CompactConfig definition)
+# Backward compatibility aliases (must be after definitions)
 CompressionConfig = CompactConfig
+
+# Legacy alias - create minimal TranscriptEntry class
+@dataclass(frozen=True)
+class TranscriptEntry:
+    kind: str
+    content: str
+    tool_name: str | None = None
+    call_id: str | None = None
+    ok: bool | None = None
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            'kind': self.kind,
+            'content': self.content,
+            'tool_name': self.tool_name,
+            'call_id': self.call_id,
+            'ok': self.ok,
+        }
+
+    def render_line(self) -> str:
+        if self.kind == 'tool_result':
+            status = 'ok' if self.ok else 'error'
+            return f'tool_result[{self.tool_name or "unknown"}:{self.call_id or "-"}:{status}] {self.content}'
+        return f'{self.kind}: {self.content}'
 
 
 @dataclass
@@ -323,7 +347,104 @@ def _generate_archive_summary(groups: List[MessageGroup]) -> str:
         
         lines.append(f'- Round {group.round_id}: {tool_count} tool calls, {group.token_count} tokens')
     
+# Legacy aliases for backward compatibility
+estimate_tokens = estimate_messages_tokens
+
+
+def micro_compact_entries(
+    entries: Tuple[TranscriptEntry, ...],
+    *,
+    keep_last_results: int,
+) -> Tuple[TranscriptEntry, ...]:
+    """Legacy function - converts to messages format and back"""
+    # Convert TranscriptEntry to dict messages for micro_compact_messages
+    messages = []
+    for entry in entries:
+        if entry.kind == 'user':
+            role = 'user'
+        elif entry.kind == 'assistant':
+            role = 'assistant'
+        elif entry.kind == 'tool_result':
+            role = 'tool'
+        else:
+            role = entry.kind
+        messages.append({
+            'role': role,
+            'content': entry.content,
+        })
+    
+    # Use micro_compact_messages
+    compacted = micro_compact_messages(
+        messages,
+        keep_last_results=keep_last_results,
+    )
+    
+    # Convert back to TranscriptEntry
+    result: List[TranscriptEntry] = []
+    for msg in compacted:
+        content = msg.get('content', '')
+        if isinstance(content, list):
+            # Handle tool_result content blocks
+            for block in content:
+                if isinstance(block, dict) and block.get('type') == 'tool_result':
+                    result.append(TranscriptEntry(
+                        kind='tool_result',
+                        content=block.get('content', ''),
+                        tool_name=block.get('tool_use_id'),
+                        call_id=block.get('tool_call_id'),
+                        ok=block.get('is_error') is not True,
+                    ))
+        elif msg.get('role') == 'tool':
+            result.append(TranscriptEntry(
+                kind='tool_result',
+                content=str(content),
+            ))
+        else:
+            result.append(TranscriptEntry(
+                kind=msg.get('role', 'unknown'),
+                content=str(content),
+            ))
+    
+    return tuple(result)
+
+
+def summarize_entries_deterministically(
+    *,
+    goal: str,
+    previous_summary: str,
+    entries: Tuple[TranscriptEntry, ...],
+) -> str:
+    """Legacy summary function"""
+    lines = [
+        f'Goal: {goal}',
+        f'Previous summary: {previous_summary or "none"}',
+        'Recent transcript:',
+    ]
+    for entry in entries[-12:]:
+        lines.append(f'- {entry.render_line()[:240]}')
     return '\n'.join(lines)
+
+
+def archive_transcript(
+    *,
+    transcripts_dir: Path,
+    compaction_index: int,
+    reason: str,
+    goal: str,
+    previous_summary: str,
+    entries: Tuple[TranscriptEntry, ...],
+) -> Path:
+    """Legacy archive function"""
+    transcripts_dir.mkdir(parents=True, exist_ok=True)
+    path = transcripts_dir / f'compact_{compaction_index:04d}.json'
+    payload = {
+        'goal': goal,
+        'reason': reason,
+        'previous_summary': previous_summary,
+        'entries': [entry.to_dict() for entry in entries],
+    }
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
+    return path
 
 
 # ============== Full Compression ==============
