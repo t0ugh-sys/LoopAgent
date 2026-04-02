@@ -9,7 +9,6 @@ from typing import Any, Callable, Dict, List, Optional, Union
 
 from loop_agent.agent_protocol import ToolCall, ToolResult
 from loop_agent.tool_def import (
-    ToolDefaults,
     ToolRegistration,
     ToolUseContext,
     ValidationResult,
