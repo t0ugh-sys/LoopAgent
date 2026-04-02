@@ -58,6 +58,22 @@ class CompactConfig:
     # 压缩后恢复
     max_restore_files: int = 5
     max_tokens_per_file: int = 5000
+    
+    # Recent transcript entries (legacy)
+    recent_transcript_entries: int = 10
+    
+    def validate(self) -> None:
+        """验证配置有效性"""
+        if self.max_context_tokens <= 0:
+            raise ValueError('max_context_tokens must be positive')
+        if self.warn_tokens_percent <= 0 or self.warn_tokens_percent > 1:
+            raise ValueError('warn_tokens_percent must be in (0, 1]')
+        if self.micro_keep_last_results < 0:
+            raise ValueError('micro_keep_last_results must be non-negative')
+        if self.partial_max_rounds <= 0:
+            raise ValueError('partial_max_rounds must be positive')
+        if self.recent_transcript_entries < 0:
+            raise ValueError('recent_transcript_entries must be non-negative')
 
 
 # Backward compatibility aliases (must be after definitions)
