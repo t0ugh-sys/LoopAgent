@@ -12,13 +12,46 @@ from loop_agent.agent_protocol import ToolCall
 from loop_agent.tools import (
     ToolContext,
     build_default_tools,
+    builtin_tool_registrations,
     execute_tool_call,
     fetch_url_tool,
+    read_file_tool,
     register_tool_handler,
+    run_command_tool,
+    write_file_tool,
 )
+from loop_agent.skills import SkillLoader
 
 
 class ToolsTests(unittest.TestCase):
+    def test_should_build_dispatch_from_builtin_registrations(self) -> None:
+        registrations = builtin_tool_registrations()
+        names = [name for name, _ in registrations]
+        dispatch = build_default_tools()
+
+        self.assertIn('read_file', names)
+        self.assertIn('compact', names)
+        self.assertIn('todo_write', names)
+        self.assertIn('load_skill', names)
+        self.assertIn('run_command_async', names)
+        self.assertIn('git_status', names)
+        self.assertIn('gh_issue_list', names)
+        self.assertEqual(set(names), set(dispatch.keys()))
+
+    def test_should_load_skill_body_on_demand(self) -> None:
+        loader = SkillLoader()
+        self.assertTrue(loader.load('files'))
+        call = ToolCall(id='call_1', name='load_skill', arguments={'name': 'files'})
+        result = execute_tool_call(
+            ToolContext(workspace_root=Path('.'), skill_loader=loader),
+            call,
+            build_default_tools(),
+        )
+
+        self.assertTrue(result.ok, msg=result.error or '')
+        self.assertIn('<skill name="files">', result.output)
+        self.assertIn('provided tools:', result.output.lower())
+        self.assertIn('apply_patch', result.output)
     def test_should_register_custom_tool_handler_in_dispatch_map(self) -> None:
         def echo_tool(context: ToolContext, args):
             return type('Result', (), {})  # pragma: no cover
@@ -110,6 +143,79 @@ class ToolsTests(unittest.TestCase):
         self.assertIn('World', result.output)
         self.assertNotIn('alert(1)', result.output)
         self.assertNotIn('color:red', result.output)
+
+    def test_run_command_requires_cmd_list(self) -> None:
+        """run_command_tool should reject non-list cmd arguments."""
+        tmp_dir = Path('tests/.tmp') / f'tools-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            # Missing cmd
+            result = run_command_tool(ToolContext(workspace_root=tmp_dir), {'id': 'test_1'})
+            self.assertFalse(result.ok)
+            self.assertEqual(result.error, 'cmd list is required')
+
+            # String cmd instead of list
+            result = run_command_tool(ToolContext(workspace_root=tmp_dir), {'cmd': 'echo hello', 'id': 'test_1'})
+            self.assertFalse(result.ok)
+            self.assertEqual(result.error, 'cmd list is required')
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_run_command_with_list_args(self) -> None:
+        """run_command_tool should execute command with list arguments."""
+        tmp_dir = Path('tests/.tmp') / f'tools-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            result = run_command_tool(
+                ToolContext(workspace_root=tmp_dir),
+                {'cmd': ['echo', 'hello'], 'id': 'test_1'}
+            )
+            self.assertTrue(result.ok)
+            self.assertIn('hello', result.output)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_run_command_handles_not_found(self) -> None:
+        """run_command_tool should return error for nonexistent command."""
+        tmp_dir = Path('tests/.tmp') / f'tools-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            result = run_command_tool(
+                ToolContext(workspace_root=tmp_dir),
+                {'cmd': ['nonexistent_command_xyz'], 'id': 'test_1'}
+            )
+            self.assertFalse(result.ok)
+            self.assertIn('not found', result.error)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_read_file_escapes_workspace(self) -> None:
+        """read_file_tool should reject paths escaping workspace."""
+        tmp_dir = Path('tests/.tmp') / f'tools-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            result = read_file_tool(
+                ToolContext(workspace_root=tmp_dir),
+                {'path': '../outside.txt', 'id': 'test_1'}
+            )
+            self.assertFalse(result.ok)
+            self.assertIn('workspace', result.error)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_write_file_escapes_workspace(self) -> None:
+        """write_file_tool should reject paths escaping workspace."""
+        tmp_dir = Path('tests/.tmp') / f'tools-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            result = write_file_tool(
+                ToolContext(workspace_root=tmp_dir),
+                {'path': '../outside.txt', 'content': 'x', 'id': 'test_1'}
+            )
+            self.assertFalse(result.ok)
+            self.assertIn('workspace', result.error)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 if __name__ == '__main__':

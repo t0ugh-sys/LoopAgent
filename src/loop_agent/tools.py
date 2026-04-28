@@ -9,18 +9,28 @@ import urllib.parse
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Tuple
+from typing import Any, Callable, Dict, Iterable, List, Tuple
 
 from .agent_protocol import ToolCall, ToolResult
+from .background import BackgroundCommandRunner
+from .compression import CompactManager
+from .policies import ToolPolicy
+from .todo import render_todo_lines
 
 
 @dataclass(frozen=True)
 class ToolContext:
     workspace_root: Path
+    policy: ToolPolicy = ToolPolicy.allow_all()
+    todo_manager: Any = None
+    skill_loader: Any = None
+    compact_manager: CompactManager | None = None
+    background_runner: BackgroundCommandRunner | None = None
 
 
 ToolFn = Callable[[ToolContext, Dict[str, object]], ToolResult]
 ToolDispatchMap = Dict[str, ToolFn]
+ToolRegistration = Tuple[str, ToolFn]
 
 
 _SEARCH_SKIP_DIRS = {
@@ -230,46 +240,26 @@ def search_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
 
 
 def run_command_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
-    """Run a command in the workspace. 
-    
-    For security, prefer using 'cmd' (list) over 'command' (string with shell=True).
-    If using 'command' string, ensure input is validated to prevent injection.
+    """Run a command in the workspace using shell=False mode for security.
+
+    Args:
+        cmd: List of command arguments (e.g., ['ls', '-la'])
+        id: Optional tool call ID
+
+    Note: Shell features like pipes and wildcards are not supported.
+          Use 'bash -c "cmd1 | cmd2"' if shell features are needed.
     """
-    command = str(args.get('command', '')).strip()
-    cmd_list = args.get('cmd')  # List of args for shell=False mode
+    cmd_list = args.get('cmd')
     call_id = str(args.get('id', 'run_command'))
-    
-    # Determine if we're using safe mode (list of args) or legacy mode (string with shell)
-    if cmd_list is not None and isinstance(cmd_list, list):
-        # Safe mode: use list of arguments, shell=False
-        try:
-            proc = subprocess.run(
-                cmd_list,
-                cwd=str(context.workspace_root),
-                shell=False,
-                check=False,
-                text=True,
-                capture_output=True,
-                encoding='utf-8',
-                errors='replace',
-            )
-            merged = (proc.stdout or '') + (proc.stderr or '')
-            ok = proc.returncode == 0
-            return ToolResult(id=call_id, ok=ok, output=merged.strip(), error=None if ok else f'exit={proc.returncode}')
-        except FileNotFoundError as exc:
-            return ToolResult(id=call_id, ok=False, output='', error=f'command not found: {exc.filename}')
-        except Exception as exc:
-            return ToolResult(id=call_id, ok=False, output='', error=str(exc))
-    
-    # Legacy mode: string command with shell=True (DEPRECATED - security risk)
-    if not command:
-        return ToolResult(id=call_id, ok=False, output='', error='command or cmd is required')
+
+    if not isinstance(cmd_list, list):
+        return ToolResult(id=call_id, ok=False, output='', error='cmd list is required')
 
     try:
         proc = subprocess.run(
-            command,
+            [str(item) for item in cmd_list],
             cwd=str(context.workspace_root),
-            shell=True,
+            shell=False,
             check=False,
             text=True,
             capture_output=True,
@@ -279,6 +269,8 @@ def run_command_tool(context: ToolContext, args: Dict[str, object]) -> ToolResul
         merged = (proc.stdout or '') + (proc.stderr or '')
         ok = proc.returncode == 0
         return ToolResult(id=call_id, ok=ok, output=merged.strip(), error=None if ok else f'exit={proc.returncode}')
+    except FileNotFoundError as exc:
+        return ToolResult(id=call_id, ok=False, output='', error=f'command not found: {exc.filename}')
     except Exception as exc:
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
@@ -439,23 +431,98 @@ def analyze_memory_tool(context: ToolContext, args: Dict[str, object]) -> ToolRe
         return ToolResult(id=call_id, ok=False, output='', error=str(exc))
 
 
+def run_command_async_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
+    call_id = str(args.get('id', 'run_command_async'))
+    runner = context.background_runner
+    if runner is None:
+        return ToolResult(id=call_id, ok=False, output='', error='background runner is not configured')
+
+    cmd_list = args.get('cmd')
+    if not isinstance(cmd_list, list):
+        return ToolResult(id=call_id, ok=False, output='', error='cmd list is required')
+    return runner.spawn(command=[str(item) for item in cmd_list], call_id=call_id)
+
+
+def todo_write_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
+    call_id = str(args.get('id', 'todo_write'))
+    manager = context.todo_manager
+    if manager is None:
+        return ToolResult(id=call_id, ok=False, output='', error='todo manager is not configured')
+
+    items = args.get('items')
+    if not isinstance(items, list):
+        return ToolResult(id=call_id, ok=False, output='', error='items list is required')
+
+    try:
+        updated_items = manager.write(items)
+        lines = [
+            'todo updated',
+            *[f'- {line}' for line in render_todo_lines(updated_items)],
+        ]
+        return ToolResult(id=call_id, ok=True, output='\n'.join(lines), error=None)
+    except Exception as exc:
+        return ToolResult(id=call_id, ok=False, output='', error=str(exc))
+
+
+def load_skill_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
+    call_id = str(args.get('id', 'load_skill'))
+    loader = context.skill_loader
+    if loader is None:
+        return ToolResult(id=call_id, ok=False, output='', error='skill loader is not configured')
+
+    name = str(args.get('name', '')).strip()
+    if not name:
+        return ToolResult(id=call_id, ok=False, output='', error='skill name is required')
+
+    body = loader.load_body(name)
+    if body is None:
+        return ToolResult(id=call_id, ok=False, output='', error=f'skill not loaded: {name}')
+    return ToolResult(id=call_id, ok=True, output=f'<skill name=\"{name}\">\n{body}\n</skill>')
+
+
+def compact_tool(context: ToolContext, args: Dict[str, object]) -> ToolResult:
+    call_id = str(args.get('id', 'compact'))
+    manager = context.compact_manager
+    if manager is None:
+        return ToolResult(id=call_id, ok=False, output='', error='compact manager is not configured')
+
+    reason = str(args.get('reason', '')).strip()
+    manager.request(reason)
+    message = 'compaction requested'
+    if reason:
+        message += f': {reason}'
+    return ToolResult(id=call_id, ok=True, output=message, error=None)
 def register_tool_handler(dispatch_map: ToolDispatchMap, name: str, handler: ToolFn) -> ToolDispatchMap:
     dispatch_map[name] = handler
     return dispatch_map
 
 
-def _build_tool_dispatch_map(registrations: Iterable[Tuple[str, ToolFn]]) -> ToolDispatchMap:
+def _build_tool_dispatch_map(registrations: Iterable[ToolRegistration]) -> ToolDispatchMap:
     dispatch_map: ToolDispatchMap = {}
     for name, handler in registrations:
         register_tool_handler(dispatch_map, name, handler)
     return dispatch_map
 
 
-def build_default_tools() -> ToolDispatchMap:
-    # Keep tool names stable; they become part of the agent's contract.
-    # Harness boundary: to expose a new tool to the model, add one handler and
-    # register it in this dispatch map. The loop itself does not need changes.
-    from .git_tools import (
+def _builtin_core_tool_registrations() -> List[ToolRegistration]:
+    return [
+        ('load_skill', load_skill_tool),
+        ('compact', compact_tool),
+        ('todo_write', todo_write_tool),
+        ('read_file', read_file_tool),
+        ('write_file', write_file_tool),
+        ('apply_patch', apply_patch_tool),
+        ('search', search_tool),
+        ('run_command', run_command_tool),
+        ('run_command_async', run_command_async_tool),
+        ('web_search', web_search_tool),
+        ('fetch_url', fetch_url_tool),
+        ('analyze_memory', analyze_memory_tool),
+    ]
+
+
+def _builtin_git_tool_registrations() -> List[ToolRegistration]:
+    from .ops.git_tools import (
         git_branch_list_tool,
         git_checkout_tool,
         git_merge_and_push_tool,
@@ -464,7 +531,20 @@ def build_default_tools() -> ToolDispatchMap:
         git_push_tool,
         git_status_tool,
     )
-    from .github_tools import (
+
+    return [
+        ('git_status', git_status_tool),
+        ('git_branch_list', git_branch_list_tool),
+        ('git_checkout', git_checkout_tool),
+        ('git_pull', git_pull_tool),
+        ('git_merge', git_merge_tool),
+        ('git_merge_and_push', git_merge_and_push_tool),
+        ('git_push', git_push_tool),
+    ]
+
+
+def _builtin_github_tool_registrations() -> List[ToolRegistration]:
+    from .ops.github_tools import (
         gh_auth_status_tool,
         gh_issue_close_tool,
         gh_issue_create_tool,
@@ -480,24 +560,7 @@ def build_default_tools() -> ToolDispatchMap:
         gh_repo_list_tool,
     )
 
-    registrations: List[Tuple[str, ToolFn]] = [
-        ('read_file', read_file_tool),
-        ('write_file', write_file_tool),
-        ('apply_patch', apply_patch_tool),
-        ('search', search_tool),
-        ('run_command', run_command_tool),
-        ('web_search', web_search_tool),
-        ('fetch_url', fetch_url_tool),
-        ('analyze_memory', analyze_memory_tool),
-        # Git
-        ('git_status', git_status_tool),
-        ('git_branch_list', git_branch_list_tool),
-        ('git_checkout', git_checkout_tool),
-        ('git_pull', git_pull_tool),
-        ('git_merge', git_merge_tool),
-        ('git_merge_and_push', git_merge_and_push_tool),
-        ('git_push', git_push_tool),
-        # GitHub (via gh CLI)
+    return [
         ('gh_auth_status', gh_auth_status_tool),
         ('gh_repo_list', gh_repo_list_tool),
         ('gh_repo_create', gh_repo_create_tool),
@@ -512,13 +575,27 @@ def build_default_tools() -> ToolDispatchMap:
         ('gh_pr_comment', gh_pr_comment_tool),
         ('gh_pr_merge', gh_pr_merge_tool),
     ]
-    return _build_tool_dispatch_map(registrations)
 
 
+def builtin_tool_registrations() -> List[ToolRegistration]:
+    # Keep tool names stable; they are part of the model <-> harness contract.
+    # To add a new tool, register one more handler here. The loop itself stays unchanged.
+    registrations: List[ToolRegistration] = []
+    registrations.extend(_builtin_core_tool_registrations())
+    registrations.extend(_builtin_git_tool_registrations())
+    registrations.extend(_builtin_github_tool_registrations())
+    return registrations
+
+
+def build_default_tools() -> ToolDispatchMap:
+    return _build_tool_dispatch_map(builtin_tool_registrations())
 def execute_tool_call(context: ToolContext, tool_call: ToolCall, tools: ToolDispatchMap) -> ToolResult:
     tool = tools.get(tool_call.name)
     if tool is None:
         return ToolResult(id=tool_call.id, ok=False, output='', error=f'unknown tool: {tool_call.name}')
+    if not context.policy.allows_tool(tool_call.name):
+        denied = ', '.join(item.value for item in context.policy.denied_capabilities_for_tool(tool_call.name))
+        return ToolResult(id=tool_call.id, ok=False, output='', error=f'tool blocked by policy: {tool_call.name} ({denied})')
     args = dict(tool_call.arguments)
     args.setdefault('id', tool_call.id)
     return tool(context, args)

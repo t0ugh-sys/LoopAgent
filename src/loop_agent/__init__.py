@@ -10,6 +10,20 @@ from . import logging as log
 from . import prompts
 from . import errors
 from . import api
+from . import task_graph
+from . import mailbox
+from . import subagents
+from . import policies
+from . import worktree_manager
+from . import context_schema
+from . import scheduler
+from . import tool_use_loop
+from . import ops
+from . import ui
+from . import todo
+from . import task_store
+from . import compression
+from . import background
 
 __all__ = [
     'LoopAgent',
@@ -30,4 +44,18 @@ __all__ = [
     'prompts',
     'errors',
     'api',
+    'task_graph',
+    'mailbox',
+    'subagents',
+    'policies',
+    'worktree_manager',
+    'context_schema',
+    'scheduler',
+    'tool_use_loop',
+    'ops',
+    'ui',
+    'todo',
+    'task_store',
+    'compression',
+    'background',
 ]
