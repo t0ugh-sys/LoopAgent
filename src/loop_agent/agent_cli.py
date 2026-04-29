@@ -458,8 +458,8 @@ def _run_doctor_command(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog='agent_cli',
-        description='Run LoopAgent as a tool-use feedback loop: model decides, tools execute, results feed back.',
+        prog='anvil',
+        description='Run Anvil as a tool-use feedback loop: model decides, tools execute, results feed back.',
         formatter_class=argparse.RawTextHelpFormatter,
     )
     subparsers = parser.add_subparsers(dest='command', required=True)
@@ -470,11 +470,11 @@ def build_parser() -> argparse.ArgumentParser:
         description='Run the coding runtime as a tool-use feedback loop over a workspace.',
         epilog=(
             'Examples:\n'
-            '  agent_cli code --goal "inspect README then finish" --workspace . --provider mock --model mock-v3\n'
-            '  agent_cli code --goal-file goal.txt --workspace . --provider openai_compatible --model gpt-5.3-codex \\\n'
+            '  anvil code --goal "inspect README then finish" --workspace . --provider mock --model mock-v3\n'
+            '  anvil code --goal-file goal.txt --workspace . --provider openai_compatible --model gpt-5.3-codex \\\n'
             '    --base-url https://codex-api.packycode.com/v1 --wire-api responses --output json\n'
-            '  agent_cli code --goal "search docs then summarize" --workspace . --skill web_search --skill memory\n'
-            '  agent_cli code --goal "fix tests" --workspace . --observer-file events.jsonl --memory-dir .loopagent/runs\n'
+            '  anvil code --goal "search docs then summarize" --workspace . --skill web_search --skill memory\n'
+            '  anvil code --goal "fix tests" --workspace . --observer-file events.jsonl --memory-dir .anvil/runs\n'
         ),
         formatter_class=argparse.RawTextHelpFormatter,
     )
@@ -489,7 +489,7 @@ def build_parser() -> argparse.ArgumentParser:
     execution_group.add_argument('--output', choices=['text', 'json'], default='text')
     execution_group.add_argument('--include-history', action='store_true')
     execution_group.add_argument('--session-id', default='', help='Resume or append to an existing session id')
-    execution_group.add_argument('--sessions-dir', default='.loopagent/sessions', help='Root directory for persisted sessions')
+    execution_group.add_argument('--sessions-dir', default='.anvil/sessions', help='Root directory for persisted sessions')
     execution_group.add_argument('--permission-mode', choices=['strict', 'balanced', 'unsafe'], default='balanced')
 
     provider_group = code.add_argument_group('provider')
@@ -519,12 +519,12 @@ def build_parser() -> argparse.ArgumentParser:
     memory_group = code.add_argument_group('memory and artifacts')
     memory_group.add_argument('--history-window', type=int, default=8, help='How many recent loop outputs to feed back')
     memory_group.add_argument('--observer-file', help='Write observer events as JSONL')
-    memory_group.add_argument('--memory-dir', default='.loopagent/runs', help='Persistent memory root for run state')
+    memory_group.add_argument('--memory-dir', default='.anvil/runs', help='Persistent memory root for run state')
     memory_group.add_argument('--run-id', help='Optional run id for memory and artifacts')
     memory_group.add_argument('--summarize-every', type=int, default=5, help='Refresh memory summary every N rounds')
     memory_group.add_argument('--record-run', action='store_true', default=True)
     memory_group.add_argument('--no-record-run', action='store_false', dest='record_run')
-    memory_group.add_argument('--runs-dir', default='.loopagent/runs', help='Directory for structured run artifacts')
+    memory_group.add_argument('--runs-dir', default='.anvil/runs', help='Directory for structured run artifacts')
     memory_group.add_argument('--tasks-dir', default='.tasks', help='Workspace-relative task graph directory injected into context')
     memory_group.add_argument('--transcripts-dir', default='.transcripts', help='Workspace-relative archive directory for compacted transcripts')
     memory_group.add_argument('--max-context-tokens', type=int, default=50000, help='Auto-compact when estimated context exceeds this budget')
@@ -562,7 +562,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     replay.add_argument('--events-file', default='')
     replay.add_argument('--session-id', default='')
-    replay.add_argument('--sessions-dir', default='.loopagent/sessions')
+    replay.add_argument('--sessions-dir', default='.anvil/sessions')
     replay.set_defaults(handler=_run_replay_command)
 
     team = subparsers.add_parser(

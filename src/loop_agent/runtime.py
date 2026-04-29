@@ -54,10 +54,10 @@ class CodeRuntime:
             mode_name=str(getattr(args, 'permission_mode', 'balanced')),
         )
 
-        sessions_dir_value = str(getattr(args, 'sessions_dir', '.loopagent/sessions'))
+        sessions_dir_value = str(getattr(args, 'sessions_dir', '.anvil/sessions'))
         sessions_root = Path(sessions_dir_value)
         if not sessions_root.is_absolute():
-            if sessions_dir_value == '.loopagent/sessions':
+            if sessions_dir_value in {'.anvil/sessions', '.loopagent/sessions'}:
                 sessions_root = (self.workspace_root / sessions_root).resolve()
             else:
                 sessions_root = sessions_root.resolve()

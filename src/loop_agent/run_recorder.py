@@ -21,8 +21,8 @@ class RunRecorder:
 
     @classmethod
     def create(cls, base_dir: Optional[Path] = None, *, session_id: Optional[str] = None) -> 'RunRecorder':
-        # Keep consistent with CLI defaults: `.loopagent/runs`
-        root = (base_dir or Path('.loopagent/runs')).resolve()
+        # Keep consistent with CLI defaults: `.anvil/runs`
+        root = (base_dir or Path('.anvil/runs')).resolve()
         run_dir = root / _utc_timestamp()
         run_dir.mkdir(parents=True, exist_ok=True)
         events_file = run_dir / 'events.jsonl'

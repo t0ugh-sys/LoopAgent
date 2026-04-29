@@ -38,6 +38,7 @@ ToolRegistration = Tuple[str, ToolFn]
 
 _SEARCH_SKIP_DIRS = {
     '.git',
+    '.anvil',
     '.loopagent',
     '.mypy_cache',
     '.pytest_cache',
@@ -359,12 +360,12 @@ def analyze_memory_tool(context: ToolContext, args: Dict[str, object]) -> ToolRe
     """Analyze past runs from memory store to learn patterns and insights.
     
     Args:
-        memory_dir: Path to the memory store directory (default: .loopagent/runs)
+        memory_dir: Path to the memory store directory (default: .anvil/runs)
         goal_filter: Optional goal to filter runs by
         limit: Number of recent runs to analyze (default: 5)
     """
     call_id = str(args.get('id', 'analyze_memory'))
-    memory_dir = str(args.get('memory_dir', '.loopagent/runs'))
+    memory_dir = str(args.get('memory_dir', '.anvil/runs'))
     goal_filter = str(args.get('goal_filter', '')).strip()
     limit = int(str(args.get('limit', '5')))
     

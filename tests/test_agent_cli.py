@@ -34,7 +34,7 @@ class AgentCliTests(unittest.TestCase):
         prompt = captured['prompt']
         self.assertIn('Available skills:', prompt)
         self.assertIn('- files: Read, write, patch, and search files', prompt)
-        self.assertNotIn('# LoopAgent Skills', prompt)
+        self.assertNotIn('# Anvil Skills', prompt)
 
     def test_should_describe_tool_use_loop_in_root_help(self) -> None:
         parser = build_parser()
@@ -108,7 +108,7 @@ class AgentCliTests(unittest.TestCase):
             self.assertEqual(exit_code, 0)
             self.assertTrue((memory_dir / 'r1' / 'events.jsonl').exists())
             self.assertTrue((memory_dir / 'r1' / 'summary.json').exists())
-            session_root = tmp_dir / '.loopagent' / 'sessions'
+            session_root = tmp_dir / '.anvil' / 'sessions'
             sessions = [item for item in session_root.iterdir() if item.is_dir()]
             self.assertEqual(len(sessions), 1)
             self.assertTrue((sessions[0] / 'session.json').exists())
