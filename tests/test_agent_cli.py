@@ -16,6 +16,7 @@ from anvil.commands import (
     format_event_summary,
     format_history_summary,
     format_permission_summary,
+    format_session_panel,
     format_summary_text,
     format_status_summary,
     format_todo_summary,
@@ -69,6 +70,7 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(parse_slash_command('/resume now').argument, 'now')
         self.assertEqual(parse_slash_command('/status').name, 'status')
         self.assertEqual(parse_slash_command('/history 12').argument, '12')
+        self.assertEqual(parse_slash_command('/panel').name, 'panel')
         self.assertIsNone(parse_slash_command('plain text'))
 
     def test_should_format_session_views(self) -> None:
@@ -98,6 +100,7 @@ class AgentCliTests(unittest.TestCase):
             self.assertIn('recent_events:', format_event_summary(session_store))
             self.assertIn('cached_rules: 1', format_permission_summary(session_store))
             self.assertIn('[completed] inspect repo', format_todo_summary(session_store))
+            self.assertIn('permissions:', format_session_panel(session_store))
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -189,12 +192,18 @@ class AgentCliTests(unittest.TestCase):
                 session_store=session_store,
                 tool_specs=builtin_tool_specs(),
             )
+            panel_result = execute_slash_command(
+                parse_slash_command('/panel'),
+                session_store=session_store,
+                tool_specs=builtin_tool_specs(),
+            )
             self.assertIn('assistant: two', history_result.output)
             self.assertNotIn('user: one', history_result.output)
             self.assertIn('chat_assistant', events_result.output)
             self.assertIn('git_status', tools_result.output)
             self.assertNotIn('read_file', tools_result.output)
             self.assertIn('repo inspected', summary_result.output)
+            self.assertIn('recent_events:', panel_result.output)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 

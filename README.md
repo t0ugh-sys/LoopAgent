@@ -102,6 +102,7 @@ The default `anvil` entrypoint starts an interactive session-first runtime. It p
 /permissions
 /todo
 /tools
+/panel
 /resume
 /exit
 ```
