@@ -121,6 +121,7 @@ Useful first commands:
 anvil --help
 anvil code --help
 anvil tools
+anvil replay --session-id <session_id> --pretty --limit 20
 ```
 
 ## Runtime Layout

@@ -1,9 +1,8 @@
 from __future__ import annotations
 
-import json
-
 from ..messages import render_transcript
 from ..session import SessionStore
+from .event_viewer import render_event_stream
 
 
 def parse_limit(argument: str, *, default: int, maximum: int) -> int:
@@ -41,22 +40,7 @@ def render_history_summary(session_store: SessionStore, *, limit: int = 8) -> st
 
 
 def render_event_summary(session_store: SessionStore, *, limit: int = 10) -> str:
-    if not session_store.events_file.exists():
-        return 'recent_events:\n(empty)'
-    rows: list[str] = []
-    for line in session_store.events_file.read_text(encoding='utf-8').splitlines()[-limit:]:
-        try:
-            payload = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(payload, dict):
-            continue
-        event = str(payload.get('event', 'unknown'))
-        ts = str(payload.get('ts', ''))
-        tool_name = str(payload.get('tool_name', '') or '')
-        suffix = f' [{tool_name}]' if tool_name else ''
-        rows.append(f'- {ts} {event}{suffix}'.strip())
-    return 'recent_events:\n' + ('\n'.join(rows) if rows else '(empty)')
+    return 'recent_events:\n' + render_event_stream(session_store.events_file, limit=limit)
 
 
 def render_permission_summary(session_store: SessionStore) -> str:

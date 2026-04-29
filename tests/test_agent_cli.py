@@ -22,6 +22,7 @@ from anvil.commands import (
     format_todo_summary,
     parse_slash_command,
 )
+from anvil.services.event_viewer import render_event_row
 from anvil.session import SessionStore
 from anvil.skills import SkillLoader
 from anvil.tools import builtin_tool_specs
@@ -296,6 +297,21 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(args.sessions_dir, '.sessions')
         self.assertEqual(args.permission_mode, 'unsafe')
 
+    def test_should_render_pretty_event_row(self) -> None:
+        text = render_event_row(
+            {
+                'ts': '2026-01-01T00:00:00Z',
+                'event': 'step_succeeded',
+                'tool_name': 'read_file',
+                'permission_decision': 'allow',
+                'session_id': 'sess-1',
+            }
+        )
+        self.assertIn('step_succeeded', text)
+        self.assertIn('[read_file]', text)
+        self.assertIn('permission=allow', text)
+        self.assertIn('session=sess-1', text)
+
     def test_should_record_structured_tool_events(self) -> None:
         parser = build_parser()
         tmp_dir = Path('tests/.tmp') / f'ocli-{uuid.uuid4().hex}'
@@ -458,6 +474,40 @@ class AgentCliTests(unittest.TestCase):
             replay_text = replay_buffer.getvalue()
             self.assertIn('"event": "run_started"', replay_text)
             self.assertIn(payload['session_id'], replay_text)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_pretty_replay_events_from_session_file(self) -> None:
+        tmp_dir = Path('D:/workspace/Anvil/.tmp') / f'replay-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        events_file = tmp_dir / 'events.jsonl'
+        try:
+            events_file.write_text(
+                '\n'.join(
+                    [
+                        json.dumps({'ts': '2026-01-01T00:00:00Z', 'event': 'run_started', 'session_id': 'sess-1'}),
+                        json.dumps(
+                            {
+                                'ts': '2026-01-01T00:00:01Z',
+                                'event': 'step_succeeded',
+                                'tool_name': 'read_file',
+                                'permission_decision': 'allow',
+                                'session_id': 'sess-1',
+                            }
+                        ),
+                    ]
+                ),
+                encoding='utf-8',
+            )
+            parser = build_parser()
+            replay_args = parser.parse_args(['replay', '--events-file', str(events_file), '--pretty', '--limit', '1'])
+            replay_buffer = io.StringIO()
+            with patch('sys.stdout', replay_buffer):
+                self.assertEqual(replay_args.handler(replay_args), 0)
+            replay_text = replay_buffer.getvalue()
+            self.assertIn('step_succeeded', replay_text)
+            self.assertIn('[read_file]', replay_text)
+            self.assertNotIn('run_started', replay_text)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 

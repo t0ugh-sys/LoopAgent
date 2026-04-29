@@ -11,6 +11,7 @@ from typing import Any, Dict, List, Optional, Tuple
 from .llm.providers import build_invoke_from_args
 from .ops.doctor import format_doctor_report, run_provider_doctor
 from .services import coding_runtime as _coding_runtime
+from .services.event_viewer import render_event_stream
 from .services.session_runtime import should_launch_interactive as _should_launch_interactive
 from .skills import get_skill, list_skills
 from .task_graph import Task
@@ -313,6 +314,9 @@ def _run_replay_command(args: argparse.Namespace) -> int:
     if not events_file.exists():
         print(f'events file not found: {events_file}')
         return 1
+    if getattr(args, 'pretty', False):
+        print(render_event_stream(events_file, limit=getattr(args, 'limit', None)))
+        return 0
     print(events_file.read_text(encoding='utf-8'))
     return 0
 
@@ -441,6 +445,8 @@ def build_parser() -> argparse.ArgumentParser:
     replay.add_argument('--events-file', default='')
     replay.add_argument('--session-id', default='')
     replay.add_argument('--sessions-dir', default='.anvil/sessions')
+    replay.add_argument('--pretty', action='store_true', help='Render a human-readable event stream')
+    replay.add_argument('--limit', type=int, help='Limit pretty replay to the most recent N events')
     replay.set_defaults(handler=_run_replay_command)
 
     team = subparsers.add_parser(
