@@ -13,8 +13,10 @@ import _bootstrap  # noqa: F401
 from anvil.agent_cli import _build_coding_decider, _run_code_command, _should_launch_interactive, build_parser
 from anvil.commands import (
     execute_slash_command,
+    format_event_summary,
     format_history_summary,
     format_permission_summary,
+    format_summary_text,
     format_status_summary,
     format_todo_summary,
     parse_slash_command,
@@ -66,6 +68,7 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(parse_slash_command('/help').name, 'help')
         self.assertEqual(parse_slash_command('/resume now').argument, 'now')
         self.assertEqual(parse_slash_command('/status').name, 'status')
+        self.assertEqual(parse_slash_command('/history 12').argument, '12')
         self.assertIsNone(parse_slash_command('plain text'))
 
     def test_should_format_session_views(self) -> None:
@@ -91,6 +94,8 @@ class AgentCliTests(unittest.TestCase):
             session_store.append_event('chat_assistant', {'role': 'assistant', 'content': 'hi'})
             self.assertIn('session_id:', format_status_summary(session_store))
             self.assertIn('recent_history:', format_history_summary(session_store))
+            self.assertIn('summary:\nrepo inspected', format_summary_text(session_store))
+            self.assertIn('recent_events:', format_event_summary(session_store))
             self.assertIn('cached_rules: 1', format_permission_summary(session_store))
             self.assertIn('[completed] inspect repo', format_todo_summary(session_store))
         finally:
@@ -147,6 +152,49 @@ class AgentCliTests(unittest.TestCase):
             self.assertIn('inspect runtime', result.output)
             self.assertIn('user: hello', result.output)
             self.assertIn('permissions:', result.output)
+            self.assertIn('recent_events:', result.output)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_support_history_events_and_tool_filters(self) -> None:
+        tmp_dir = Path('D:/workspace/Anvil/.tmp') / f'session-cmds-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            session_store = SessionStore.create(
+                root_dir=tmp_dir,
+                workspace_root=tmp_dir,
+                goal='inspect runtime',
+                memory_run_dir=tmp_dir / 'memory',
+            )
+            session_store.state.last_summary = 'repo inspected'
+            session_store.append_event('chat_user', {'role': 'user', 'content': 'one'})
+            session_store.append_event('chat_assistant', {'role': 'assistant', 'content': 'two'})
+            history_result = execute_slash_command(
+                parse_slash_command('/history 1'),
+                session_store=session_store,
+                tool_specs=builtin_tool_specs(),
+            )
+            events_result = execute_slash_command(
+                parse_slash_command('/events 2'),
+                session_store=session_store,
+                tool_specs=builtin_tool_specs(),
+            )
+            tools_result = execute_slash_command(
+                parse_slash_command('/tools git'),
+                session_store=session_store,
+                tool_specs=builtin_tool_specs(),
+            )
+            summary_result = execute_slash_command(
+                parse_slash_command('/summary'),
+                session_store=session_store,
+                tool_specs=builtin_tool_specs(),
+            )
+            self.assertIn('assistant: two', history_result.output)
+            self.assertNotIn('user: one', history_result.output)
+            self.assertIn('chat_assistant', events_result.output)
+            self.assertIn('git_status', tools_result.output)
+            self.assertNotIn('read_file', tools_result.output)
+            self.assertIn('repo inspected', summary_result.output)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
