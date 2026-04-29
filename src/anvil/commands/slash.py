@@ -5,6 +5,7 @@ from typing import Iterable
 
 from ..session import SessionState, SessionStore
 from ..tool_spec import ToolSpec
+from ..tool_views import render_tool_overview
 
 
 @dataclass(frozen=True)
@@ -124,8 +125,8 @@ def execute_slash_command(
             return CommandResult(output='runtime config unavailable')
         return CommandResult(output=runtime_config_manager.set_base_url(command.argument))
     if command.name == 'tools':
-        names = [spec.name for spec in sorted(tool_specs, key=lambda item: item.name)]
-        return CommandResult(output='\n'.join(names) if names else 'No tools registered.')
+        specs = sorted(tool_specs, key=lambda item: item.name)
+        return CommandResult(output=render_tool_overview(specs) if specs else 'No tools registered.')
     if command.name in {'resume', 'status'}:
         state = session_store.state
         config_text = runtime_config_manager.summary() if runtime_config_manager is not None else 'runtime config unavailable'

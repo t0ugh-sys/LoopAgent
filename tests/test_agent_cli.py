@@ -18,6 +18,7 @@ from anvil.services.cli_commands import _render_pretty_replay
 from anvil.services.runtime_config import RuntimeConfigManager
 from anvil.skills import SkillLoader
 from anvil.tools import builtin_tool_specs
+from anvil.tool_views import render_tool_overview
 
 
 class AgentCliTests(unittest.TestCase):
@@ -452,6 +453,14 @@ class AgentCliTests(unittest.TestCase):
         self.assertIn('todo_state:\n[x] inspect repo', output)
         self.assertIn('recent_tools:\n- read_file [ok] permission=allow', output)
         self.assertIn('runtime_config:\nprovider: anthropic', output)
+
+    def test_should_render_tool_overview_grouped_by_capability(self) -> None:
+        output = render_tool_overview(builtin_tool_specs())
+        self.assertIn('[read]', output)
+        self.assertIn('[write]', output)
+        self.assertIn('[execute]', output)
+        self.assertIn('read_file risk=low', output)
+        self.assertIn('run_command risk=high', output)
 
 
 if __name__ == '__main__':

@@ -9,14 +9,13 @@ from typing import Any, Dict, Iterable, List
 from ..ops.doctor import format_doctor_report, run_provider_doctor
 from ..skills import get_skill, list_skills
 from ..tools import build_default_tools, builtin_tool_specs
+from ..tool_views import render_tool_overview
 
 
 def run_tools_command(args: argparse.Namespace) -> int:
     specs = sorted(builtin_tool_specs(), key=lambda item: item.name)
     if getattr(args, 'verbose', False):
-        for item in specs:
-            capabilities = ','.join(cap.value for cap in item.capabilities) or 'none'
-            print(f'{item.name}: {item.description} [{capabilities}] risk={item.risk_level.value}')
+        print(render_tool_overview(specs))
         return 0
     names = sorted(build_default_tools().keys())
     print('\n'.join(names))
