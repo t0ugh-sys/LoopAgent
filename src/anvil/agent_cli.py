@@ -10,13 +10,13 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from .llm.providers import build_invoke_from_args
 from .ops.doctor import format_doctor_report, run_provider_doctor
+from .services.catalog_service import render_skills, render_tools
 from .services import coding_runtime as _coding_runtime
-from .services.event_viewer import render_event_stream
+from .services.replay_service import render_replay, resolve_events_file
 from .services.session_runtime import should_launch_interactive as _should_launch_interactive
-from .skills import get_skill, list_skills
 from .task_graph import Task
 from .team_runtime import PersistentTeamRuntime, PersistentTeammateSpec
-from .tools import build_default_tools, builtin_tool_specs
+from .tools import builtin_tool_specs
 
 
 def _default_run_id() -> str:
@@ -281,43 +281,25 @@ def _run_team_shutdown_command(args: argparse.Namespace) -> int:
 
 
 def _run_tools_command(args: argparse.Namespace) -> int:
-    specs = sorted(builtin_tool_specs(), key=lambda item: item.name)
-    if getattr(args, 'verbose', False):
-        for item in specs:
-            capabilities = ','.join(cap.value for cap in item.capabilities) or 'none'
-            print(f'{item.name}: {item.description} [{capabilities}] risk={item.risk_level.value}')
-        return 0
-    names = sorted(build_default_tools().keys())
-    print('\n'.join(names))
+    print(render_tools(verbose=getattr(args, 'verbose', False)))
     return 0
 
 
 def _run_skills_command(_: argparse.Namespace) -> int:
-    """List all available skills."""
-    skills = list_skills()
-    print("Available skills:")
-    for name in skills:
-        skill = get_skill(name)
-        if skill:
-            print(f"  - {name}: {skill.description}")
-    print("\nUse --skill <name> to load specific skills")
-    print("Use --skill all to load all skills")
+    print(render_skills())
     return 0
 
 
 def _run_replay_command(args: argparse.Namespace) -> int:
-    events_file_value = getattr(args, 'events_file', '')
-    if getattr(args, 'session_id', ''):
-        events_file = Path(args.sessions_dir) / args.session_id / 'events.jsonl'
-    else:
-        events_file = Path(events_file_value)
+    events_file = resolve_events_file(
+        events_file=getattr(args, 'events_file', ''),
+        session_id=getattr(args, 'session_id', ''),
+        sessions_dir=str(args.sessions_dir),
+    )
     if not events_file.exists():
         print(f'events file not found: {events_file}')
         return 1
-    if getattr(args, 'pretty', False):
-        print(render_event_stream(events_file, limit=getattr(args, 'limit', None)))
-        return 0
-    print(events_file.read_text(encoding='utf-8'))
+    print(render_replay(events_file=events_file, pretty=getattr(args, 'pretty', False), limit=getattr(args, 'limit', None)))
     return 0
 
 

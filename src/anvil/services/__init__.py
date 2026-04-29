@@ -21,4 +21,8 @@ __all__ = [
     'load_event_rows',
     'render_event_row',
     'render_event_stream',
+    'render_tools',
+    'render_skills',
+    'resolve_events_file',
+    'render_replay',
 ]

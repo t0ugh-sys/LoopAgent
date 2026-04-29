@@ -23,6 +23,8 @@ from anvil.commands import (
     parse_slash_command,
 )
 from anvil.services.event_viewer import render_event_row
+from anvil.services.catalog_service import render_skills, render_tools
+from anvil.services.replay_service import render_replay, resolve_events_file
 from anvil.session import SessionStore
 from anvil.skills import SkillLoader
 from anvil.tools import builtin_tool_specs
@@ -311,6 +313,29 @@ class AgentCliTests(unittest.TestCase):
         self.assertIn('[read_file]', text)
         self.assertIn('permission=allow', text)
         self.assertIn('session=sess-1', text)
+
+    def test_should_render_catalog_outputs(self) -> None:
+        tools_text = render_tools(verbose=False)
+        skills_text = render_skills()
+        self.assertIn('read_file', tools_text)
+        self.assertIn('Available skills:', skills_text)
+
+    def test_should_resolve_and_render_replay(self) -> None:
+        tmp_dir = Path('D:/workspace/Anvil/.tmp') / f'replay-svc-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            events_dir = tmp_dir / 'sessions' / 'sess-1'
+            events_dir.mkdir(parents=True, exist_ok=True)
+            events_file = events_dir / 'events.jsonl'
+            events_file.write_text(json.dumps({'ts': '2026-01-01T00:00:00Z', 'event': 'run_started'}) + '\n', encoding='utf-8')
+            resolved = resolve_events_file(events_file='', session_id='sess-1', sessions_dir=str(tmp_dir / 'sessions'))
+            self.assertEqual(resolved, events_file)
+            pretty = render_replay(events_file=events_file, pretty=True, limit=5)
+            raw = render_replay(events_file=events_file, pretty=False, limit=None)
+            self.assertIn('run_started', pretty)
+            self.assertIn('"event": "run_started"', raw)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def test_should_record_structured_tool_events(self) -> None:
         parser = build_parser()
