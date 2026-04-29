@@ -367,56 +367,32 @@ def micro_compact_entries(
     *,
     keep_last_results: int,
 ) -> Tuple[TranscriptEntry, ...]:
-    """Legacy function - converts to messages format and back"""
-    # Convert TranscriptEntry to dict messages for micro_compact_messages
-    messages = []
-    for entry in entries:
-        if entry.kind == 'user':
-            role = 'user'
-        elif entry.kind == 'assistant':
-            role = 'assistant'
-        elif entry.kind == 'tool_result':
-            role = 'tool'
-        else:
-            role = entry.kind
-        messages.append({
-            'role': role,
-            'content': entry.content,
-        })
-    
-    # Use micro_compact_messages
-    compacted = micro_compact_messages(
-        messages,
-        keep_last_results=keep_last_results,
-    )
-    
-    # Convert back to TranscriptEntry
-    result: List[TranscriptEntry] = []
-    for msg in compacted:
-        content = msg.get('content', '')
-        if isinstance(content, list):
-            # Handle tool_result content blocks
-            for block in content:
-                if isinstance(block, dict) and block.get('type') == 'tool_result':
-                    result.append(TranscriptEntry(
-                        kind='tool_result',
-                        content=block.get('content', ''),
-                        tool_name=block.get('tool_use_id'),
-                        call_id=block.get('tool_call_id'),
-                        ok=block.get('is_error') is not True,
-                    ))
-        elif msg.get('role') == 'tool':
-            result.append(TranscriptEntry(
+    """Compact older tool results while preserving the most recent entries verbatim."""
+    if not entries:
+        return entries
+
+    tool_result_indices = [index for index, entry in enumerate(entries) if entry.kind == 'tool_result']
+    keep_count = min(keep_last_results, len(tool_result_indices))
+    keep_indices = set(tool_result_indices[-keep_count:]) if keep_count > 0 else set()
+
+    compacted: List[TranscriptEntry] = []
+    for index, entry in enumerate(entries):
+        if entry.kind != 'tool_result' or index in keep_indices:
+            compacted.append(entry)
+            continue
+
+        tool_name = entry.tool_name or 'tool'
+        compacted.append(
+            TranscriptEntry(
                 kind='tool_result',
-                content=str(content),
-            ))
-        else:
-            result.append(TranscriptEntry(
-                kind=msg.get('role', 'unknown'),
-                content=str(content),
-            ))
-    
-    return tuple(result)
+                content=f'[Previous: used {tool_name}]',
+                tool_name=entry.tool_name,
+                call_id=entry.call_id,
+                ok=entry.ok,
+            )
+        )
+
+    return tuple(compacted)
 
 
 def summarize_entries_deterministically(
