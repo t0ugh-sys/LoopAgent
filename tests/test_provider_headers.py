@@ -4,7 +4,7 @@ import unittest
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.llm.providers import parse_provider_headers
+from anvil.llm.providers import parse_provider_headers
 
 
 class ProviderHeadersTests(unittest.TestCase):

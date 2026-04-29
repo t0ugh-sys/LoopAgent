@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.agent_protocol import ToolCall
-from loop_agent.tools import (
+from anvil.agent_protocol import ToolCall
+from anvil.tools import (
     ToolContext,
     build_default_tools,
     builtin_tool_registrations,
@@ -21,7 +21,7 @@ from loop_agent.tools import (
     run_command_tool,
     write_file_tool,
 )
-from loop_agent.skills import SkillLoader
+from anvil.skills import SkillLoader
 
 
 class ToolsTests(unittest.TestCase):

@@ -7,7 +7,7 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.mailbox import JsonlMailbox, MailMessage
+from anvil.mailbox import JsonlMailbox, MailMessage
 
 
 class MailboxTests(unittest.TestCase):

@@ -4,7 +4,7 @@ import unittest
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.protocols.json_decision import parse_json_decision
+from anvil.protocols.json_decision import parse_json_decision
 
 
 class JsonProtocolTests(unittest.TestCase):

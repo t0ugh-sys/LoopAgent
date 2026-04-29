@@ -7,7 +7,7 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.worktree_manager import WorktreeManager
+from anvil.worktree_manager import WorktreeManager
 
 
 class WorktreeManagerTests(unittest.TestCase):

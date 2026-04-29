@@ -32,7 +32,7 @@ Key rule: the loop stays stable; tools and routing evolve independently.
 ## Highlights
 
 - Tool-use feedback loop as the primary runtime model
-- Stdlib-only core in `src/loop_agent/`
+- Stdlib-only core in `src/anvil/`
 - Iterative agent loop with max-step, timeout, and cancellation stop conditions
 - Structured run artifacts in `.anvil/runs/<run_id>/`
 - Configurable model providers for mock, OpenAI-compatible, Anthropic, and Gemini flows
@@ -54,28 +54,28 @@ The npm wrapper bootstraps a local virtual environment under `~/.anvil/npm-bridg
 ```bash
 python -m pip install -e .
 python -m unittest discover -s tests -p "test_*.py" -v
-python -m loop_agent.cli --goal "write a one-line self introduction" --strategy demo --output json
+python -m anvil.cli --goal "write a one-line self introduction" --strategy demo --output json
 ```
 
 ### Node users
 
 ```bash
-npm i -g git+https://github.com/t0ugh-sys/LoopAgent.git
+npm i -g git+https://github.com/t0ugh-sys/Anvil.git
 anvil tools
 anvil code --goal "inspect README then finish" --workspace . --provider mock --model mock-v3 --output json
 ```
 
-If you have multiple Python installations, set `LOOPAGENT_PYTHON` before the first npm-backed run.
+If you have multiple Python installations, set `ANVIL_PYTHON` before the first npm-backed run.
 
 ## Common Commands
 
 ### Core CLI
 
 ```bash
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_stub --history-window 2
-python -m loop_agent.cli --goal-file goal.txt --output json --include-history
-python -m loop_agent.cli --goal-file goal.txt --observer-file events.jsonl
-python -m loop_agent.cli --goal-file goal.txt --strategy json_stub --max-steps 1 --exit-on-failure
+python -m anvil.cli --goal "answer in json protocol" --strategy json_stub --history-window 2
+python -m anvil.cli --goal-file goal.txt --output json --include-history
+python -m anvil.cli --goal-file goal.txt --observer-file events.jsonl
+python -m anvil.cli --goal-file goal.txt --strategy json_stub --max-steps 1 --exit-on-failure
 ```
 
 ### Agent CLI
@@ -144,7 +144,7 @@ todo_reminder
 ```powershell
 $env:PYTHONPATH="src"
 conda --no-plugins run --no-capture-output -n base python -m unittest discover -s tests -p "test_*.py" -v
-conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --goal-file .\goal.txt --strategy demo
+conda --no-plugins run --no-capture-output -n base python -m anvil.cli --goal-file .\goal.txt --strategy demo
 ```
 
 ## Strategies
@@ -156,7 +156,7 @@ conda --no-plugins run --no-capture-output -n base python -m loop_agent.cli --go
 Example:
 
 ```bash
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider mock --model qwen-max
+python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider mock --model qwen-max
 ```
 
 ## Provider Examples
@@ -165,40 +165,40 @@ python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --
 
 ```bash
 set OPENAI_API_KEY=sk-xxx
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-4o-mini --base-url https://api.openai.com/v1 --wire-api chat_completions
+python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-4o-mini --base-url https://api.openai.com/v1 --wire-api chat_completions
 ```
 
 ### Responses API
 
 ```bash
 set OPENAI_API_KEY=sk-xxx
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses
+python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses
 ```
 
 ### Extra provider headers
 
 ```bash
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --provider-header "x-tenant:my-team" --provider-header "x-trace-id:demo-1"
+python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --provider-header "x-tenant:my-team" --provider-header "x-trace-id:demo-1"
 ```
 
 ### Retries and fallback model
 
 ```bash
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --fallback-model gpt-5-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --max-retries 3 --retry-backoff-s 1.0 --retry-http-code 502 --retry-http-code 503
+python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --fallback-model gpt-5-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --max-retries 3 --retry-backoff-s 1.0 --retry-http-code 502 --retry-http-code 503
 ```
 
 ### Anthropic
 
 ```bash
 set ANTHROPIC_API_KEY=sk-ant-xxx
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider anthropic --model claude-3-opus-20240229
+python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider anthropic --model claude-3-opus-20240229
 ```
 
 ### Gemini
 
 ```bash
 set GEMINI_API_KEY=xxx
-python -m loop_agent.cli --goal "answer in json protocol" --strategy json_llm --provider gemini --model gemini-pro
+python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider gemini --model gemini-pro
 ```
 
 ## Run Recording and Memory
@@ -258,18 +258,18 @@ anvil code --goal "search for info" --skill web_search --skill memory
 
 - `skills/`: built-in skill notes and extension references
 - `skills/<name>/SKILL.md`: skill frontmatter plus on-demand full instructions
-- `src/loop_agent/`: core package
-- `src/loop_agent/core/`: generic loop engine, stop rules, and serialization
-- `src/loop_agent/steps/`: reusable step strategies and registries
-- `src/loop_agent/memory/`: JSONL memory store and context loading
-- `src/loop_agent/llm/`: provider adapters
-- `src/loop_agent/ops/`: provider doctor, git, and GitHub operational helpers
-- `src/loop_agent/tool_use_loop.py`: the central model -> tools -> results loop
-- `src/loop_agent/tools.py`: builtin tool registry, dispatch map, and execution boundary
-- `src/loop_agent/ui/`: optional chat-oriented TUI entrypoints
+- `src/anvil/`: core package
+- `src/anvil/core/`: generic loop engine, stop rules, and serialization
+- `src/anvil/steps/`: reusable step strategies and registries
+- `src/anvil/memory/`: JSONL memory store and context loading
+- `src/anvil/llm/`: provider adapters
+- `src/anvil/ops/`: provider doctor, git, and GitHub operational helpers
+- `src/anvil/tool_use_loop.py`: the central model -> tools -> results loop
+- `src/anvil/tools.py`: builtin tool registry, dispatch map, and execution boundary
+- `src/anvil/ui/`: optional chat-oriented TUI entrypoints
 - `tests/`: unit tests
 - `examples/`: optional demos and integrations
-- `bin/loopagent.js`: npm bridge entrypoint for `anvil` and `loopagent`
+- `bin/anvil.js`: npm bridge entrypoint for `anvil`
 - `.github/workflows/tests.yml`: Python test workflow
 - `.github/workflows/release.yml`: npm release workflow
 

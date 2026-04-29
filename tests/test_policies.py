@@ -7,9 +7,9 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.agent_protocol import ToolCall
-from loop_agent.policies import Capability, ToolPolicy, policy_from_name
-from loop_agent.tools import ToolContext, build_default_tools, execute_tool_call
+from anvil.agent_protocol import ToolCall
+from anvil.policies import Capability, ToolPolicy, policy_from_name
+from anvil.tools import ToolContext, build_default_tools, execute_tool_call
 
 
 class ToolPolicyTests(unittest.TestCase):

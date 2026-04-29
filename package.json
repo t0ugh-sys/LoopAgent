@@ -2,10 +2,9 @@
   "name": "@t0ugh-sys/anvil",
   "version": "0.1.0",
   "description": "Node CLI wrapper for the Anvil Python runtime",
-  "main": "bin/loopagent.js",
+  "main": "bin/anvil.js",
   "bin": {
-    "anvil": "bin/loopagent.js",
-    "loopagent": "bin/loopagent.js"
+    "anvil": "bin/anvil.js"
   },
   "type": "commonjs",
   "files": [
@@ -34,12 +33,12 @@
     "node",
     "automation"
   ],
-  "homepage": "https://github.com/t0ugh-sys/LoopAgent#readme",
+  "homepage": "https://github.com/t0ugh-sys/Anvil#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/t0ugh-sys/LoopAgent.git"
+    "url": "git+https://github.com/t0ugh-sys/Anvil.git"
   },
   "bugs": {
-    "url": "https://github.com/t0ugh-sys/LoopAgent/issues"
+    "url": "https://github.com/t0ugh-sys/Anvil/issues"
   }
 }

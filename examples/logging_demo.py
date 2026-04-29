@@ -2,7 +2,7 @@
 Example: Using logging system
 """
 
-from loop_agent.logging import Logger, LogLevel, LogOutput, get_logger
+from anvil.logging import Logger, LogLevel, LogOutput, get_logger
 
 
 def main():

@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.agent_cli import _build_coding_decider, _run_code_command, build_parser
-from loop_agent.skills import SkillLoader
+from anvil.agent_cli import _build_coding_decider, _run_code_command, build_parser
+from anvil.skills import SkillLoader
 
 
 class AgentCliTests(unittest.TestCase):
@@ -27,7 +27,7 @@ class AgentCliTests(unittest.TestCase):
         parser = build_parser()
         args = parser.parse_args(['code', '--goal', 'x', '--provider', 'mock', '--model', 'mock-v3'])
 
-        with patch('loop_agent.agent_cli.build_invoke_from_args', return_value=fake_invoke):
+        with patch('anvil.agent_cli.build_invoke_from_args', return_value=fake_invoke):
             decider = _build_coding_decider(args, loader)
             decider('goal', tuple(), tuple(), {}, tuple())
 

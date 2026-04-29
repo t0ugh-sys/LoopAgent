@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Provider registry with `list_providers()` and `get_provider()` functions
 
 - **Skill System**
-  - Pluggable skill architecture (`src/loop_agent/skills.py`)
+  - Pluggable skill architecture (`src/anvil/skills.py`)
   - Built-in skills: `web_search`, `memory`, `files`, `commands`, `browser`
   - Support for custom third-party skills
   - Dynamic skill loading via `SkillLoader`
@@ -29,33 +29,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - Browser automation tools (navigate, click, fill, screenshot, evaluate)
   - Safe command execution with `cmd` list parameter (shell=False)
 
-- **Configuration System** (`src/loop_agent/config.py`)
+- **Configuration System** (`src/anvil/config.py`)
   - YAML configuration file support
   - JSON configuration file support
   - `.env` file support for API keys
   - Config merging and validation
 
-- **Logging System** (`src/loop_agent/logging.py`)
+- **Logging System** (`src/anvil/logging.py`)
   - Structured logging with multiple levels (DEBUG, INFO, WARNING, ERROR, CRITICAL)
   - Multiple output destinations (stdout, stderr, file, jsonl)
   - Logger context helpers (`log_step`, `log_tool`, `log_event`)
 
-- **Prompt Templates** (`src/loop_agent/prompts.py`)
+- **Prompt Templates** (`src/anvil/prompts.py`)
   - Reusable prompt templates with variable substitution
   - Built-in templates: `json_loop`, `coding`, `analyze`, `research`
   - Custom template registration
   - Template loading from YAML/JSON files
 
-- **Error Handling** (`src/loop_agent/errors.py`)
-  - Comprehensive error hierarchy (`LoopAgentError` base class)
+- **Error Handling** (`src/anvil/errors.py`)
+  - Comprehensive error hierarchy (`AnvilError` base class)
   - Specialized exceptions: `ConfigError`, `ProviderError`, `ToolError`, `ValidationError`, `MemoryError`, `SkillError`
   - Input validation functions
   - Error formatting for JSON output
 
-- **High-level API** (`src/loop_agent/api.py`)
+- **High-level API** (`src/anvil/api.py`)
   - `AgentConfig` dataclass with validation
   - `AgentResult` for run results
-  - `LoopAgentAPI` class for easy integration
+  - `AnvilAPI` class for easy integration
   - `create_agent()` and `run_goal()` convenience functions
 
 - **Docker Support**
@@ -82,13 +82,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - Initial release
-- Core LoopAgent engine
+- Core Anvil engine
 - Basic LLM providers (mock, openai_compatible)
 - File tools (read_file, write_file, apply_patch, search)
 - CLI interface
 - JSON loop strategy
 - Memory system
 
-[Unreleased]: https://github.com/t0ugh-sys/LoopAgent/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/t0ugh-sys/LoopAgent/releases/tag/v0.1.0
-[0.0.1]: https://github.com/t0ugh-sys/LoopAgent/releases/tag/v0.0.1
+[Unreleased]: https://github.com/t0ugh-sys/Anvil/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/t0ugh-sys/Anvil/releases/tag/v0.1.0
+[0.0.1]: https://github.com/t0ugh-sys/Anvil/releases/tag/v0.0.1

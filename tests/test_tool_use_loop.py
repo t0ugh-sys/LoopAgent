@@ -10,13 +10,13 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.core.types import StepContext
-from loop_agent.skills import SkillLoader
-from loop_agent.compression import CompressionConfig, TranscriptEntry
-from loop_agent.task_graph import Task, TaskGraph
-from loop_agent.task_store import TaskStore
-from loop_agent.tool_use_loop import ToolUseState, make_tool_use_step
-from loop_agent.todo import TodoItem
+from anvil.core.types import StepContext
+from anvil.skills import SkillLoader
+from anvil.compression import CompressionConfig, TranscriptEntry
+from anvil.task_graph import Task, TaskGraph
+from anvil.task_store import TaskStore
+from anvil.tool_use_loop import ToolUseState, make_tool_use_step
+from anvil.todo import TodoItem
 
 
 class ToolUseLoopTests(unittest.TestCase):

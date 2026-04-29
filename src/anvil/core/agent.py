@@ -21,7 +21,7 @@ StateT = TypeVar('StateT')
 
 
 @dataclass(frozen=True)
-class LoopAgent(Generic[StateT]):
+class AnvilAgent(Generic[StateT]):
     step: StepFn[StateT]
     stop: StopConfig = StopConfig()
 

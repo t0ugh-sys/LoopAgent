@@ -8,8 +8,8 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.task_graph import Task, TaskGraph, TaskStatus
-from loop_agent.task_store import TaskStore
+from anvil.task_graph import Task, TaskGraph, TaskStatus
+from anvil.task_store import TaskStore
 
 
 class TaskStoreTests(unittest.TestCase):

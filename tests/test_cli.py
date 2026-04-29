@@ -11,8 +11,8 @@ import shutil
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.cli import build_jsonl_observer, build_parser, execute, resolve_goal
-from loop_agent.steps.registry import build_default_registry
+from anvil.cli import build_jsonl_observer, build_parser, execute, resolve_goal
+from anvil.steps.registry import build_default_registry
 
 
 class CliTests(unittest.TestCase):

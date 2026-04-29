@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from .core.agent import LoopAgent
+from .core.agent import AnvilAgent
 from .core.serialization import run_result_to_dict
 from .core.types import ContextSnapshot, ObserverFn, RunResult, StopConfig, StopReason
 from .memory.jsonl_store import JsonlMemoryStore
@@ -118,7 +118,7 @@ def execute(args: argparse.Namespace, registry: StepRegistry) -> Tuple[str, int]
         memory_context = memory_store.load_context(goal=goal, last_k_steps=args.history_window)
         return ContextSnapshot(state_summary=memory_context.state_summary, last_steps=memory_context.last_steps)
 
-    agent = LoopAgent(step=step, stop=StopConfig(max_steps=args.max_steps, max_elapsed_s=args.timeout_s))
+    agent = AnvilAgent(step=step, stop=StopConfig(max_steps=args.max_steps, max_elapsed_s=args.timeout_s))
     result = agent.run(goal=goal, initial_state=initial_state, observer=observer, context_provider=context_provider)
     memory_store.on_event(
         'run_finished',

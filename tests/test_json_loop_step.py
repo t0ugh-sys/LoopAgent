@@ -4,8 +4,8 @@ import unittest
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.core.types import StepContext
-from loop_agent.steps.json_loop import JsonLoopState, make_json_decision_step
+from anvil.core.types import StepContext
+from anvil.steps.json_loop import JsonLoopState, make_json_decision_step
 
 
 class JsonLoopStepTests(unittest.TestCase):

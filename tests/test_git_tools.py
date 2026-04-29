@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.ops.git_tools import git_merge_and_push_tool
-from loop_agent.tools import ToolContext
+from anvil.ops.git_tools import git_merge_and_push_tool
+from anvil.tools import ToolContext
 
 
 class _Proc:

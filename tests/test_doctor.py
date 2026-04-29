@@ -4,7 +4,7 @@ import unittest
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.ops.doctor import run_provider_doctor
+from anvil.ops.doctor import run_provider_doctor
 
 
 class DoctorTests(unittest.TestCase):

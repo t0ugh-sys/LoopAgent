@@ -4,7 +4,7 @@ import unittest
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.task_graph import Task, TaskGraph, TaskStatus
+from anvil.task_graph import Task, TaskGraph, TaskStatus
 
 
 class TaskGraphTests(unittest.TestCase):

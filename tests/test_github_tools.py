@@ -7,14 +7,14 @@ from unittest.mock import patch
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.ops.github_tools import (
+from anvil.ops.github_tools import (
     _parse_repo_from_remote,
     _resolve_repo_arg,
     gh_issue_close_tool,
     gh_issue_list_tool,
     gh_pr_merge_tool,
 )
-from loop_agent.tools import ToolContext
+from anvil.tools import ToolContext
 
 
 class _Proc:

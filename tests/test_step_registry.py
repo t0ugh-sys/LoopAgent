@@ -5,7 +5,7 @@ import unittest
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.steps.registry import build_default_registry
+from anvil.steps.registry import build_default_registry
 
 
 class StepRegistryTests(unittest.TestCase):
