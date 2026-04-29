@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,13 +16,16 @@ from .entrypoints.parser_builders import (
     register_tools_parser,
 )
 from .llm.providers import build_invoke_from_args
-from .ops.doctor import format_doctor_report, run_provider_doctor
 from .services import coding_runtime as _coding_runtime
+from .services.cli_commands import (
+    run_doctor_command as _run_doctor_command,
+    run_replay_command as _run_replay_command,
+    run_skills_command as _run_skills_command,
+    run_tools_command as _run_tools_command,
+)
 from .services.session_runtime import should_launch_interactive as _should_launch_interactive
-from .skills import get_skill, list_skills
 from .task_graph import Task
 from .team_runtime import PersistentTeamRuntime, PersistentTeammateSpec
-from .tools import build_default_tools, builtin_tool_specs
 
 
 def _default_run_id() -> str:
@@ -284,61 +286,6 @@ def _run_team_shutdown_command(args: argparse.Namespace) -> int:
     else:
         runtime.shutdown_teammate(args.to, sender=args.sender)
     print('ok')
-    return 0
-
-
-def _run_tools_command(args: argparse.Namespace) -> int:
-    specs = sorted(builtin_tool_specs(), key=lambda item: item.name)
-    if getattr(args, 'verbose', False):
-        for item in specs:
-            capabilities = ','.join(cap.value for cap in item.capabilities) or 'none'
-            print(f'{item.name}: {item.description} [{capabilities}] risk={item.risk_level.value}')
-        return 0
-    names = sorted(build_default_tools().keys())
-    print('\n'.join(names))
-    return 0
-
-
-def _run_skills_command(_: argparse.Namespace) -> int:
-    """List all available skills."""
-    skills = list_skills()
-    print("Available skills:")
-    for name in skills:
-        skill = get_skill(name)
-        if skill:
-            print(f"  - {name}: {skill.description}")
-    print("\nUse --skill <name> to load specific skills")
-    print("Use --skill all to load all skills")
-    return 0
-
-
-def _run_replay_command(args: argparse.Namespace) -> int:
-    events_file_value = getattr(args, 'events_file', '')
-    if getattr(args, 'session_id', ''):
-        events_file = Path(args.sessions_dir) / args.session_id / 'events.jsonl'
-    else:
-        events_file = Path(events_file_value)
-    if not events_file.exists():
-        print(f'events file not found: {events_file}')
-        return 1
-    print(events_file.read_text(encoding='utf-8'))
-    return 0
-
-
-def _run_doctor_command(args: argparse.Namespace) -> int:
-    api_key = os.getenv(args.api_key_env, '').strip()
-    payload = run_provider_doctor(
-        base_url=args.base_url,
-        model=args.model,
-        wire_api=args.wire_api,
-        timeout_s=args.provider_timeout_s,
-        api_key_present=bool(api_key),
-        extra_headers=args.provider_header,
-    )
-    if args.output == 'json':
-        print(json.dumps(payload, ensure_ascii=False))
-    else:
-        print(format_doctor_report(payload))
     return 0
 
 

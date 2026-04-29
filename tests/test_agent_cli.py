@@ -13,6 +13,7 @@ import _bootstrap  # noqa: F401
 from anvil.agent_cli import _build_coding_decider, _run_code_command, _should_launch_interactive, build_parser
 from anvil.commands import execute_slash_command, parse_slash_command
 from anvil.session import SessionStore
+from anvil.services.cli_commands import _render_pretty_replay
 from anvil.services.runtime_config import RuntimeConfigManager
 from anvil.skills import SkillLoader
 from anvil.tools import builtin_tool_specs
@@ -385,6 +386,39 @@ class AgentCliTests(unittest.TestCase):
             self.assertIn(payload['session_id'], replay_text)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_pretty_render_replay_rows(self) -> None:
+        output = _render_pretty_replay(
+            [
+                {
+                    'ts': '2026-04-29T10:00:00Z',
+                    'event': 'run_started',
+                    'payload': {'goal': 'inspect runtime'},
+                    'session_id': 's1',
+                },
+                {
+                    'ts': '2026-04-29T10:00:01Z',
+                    'event': 'step_succeeded',
+                    'step': 1,
+                    'tool_name': 'todo_write',
+                    'permission_decision': 'allow',
+                    'payload': {'output': 'updated config'},
+                    'session_id': 's1',
+                },
+                {
+                    'ts': '2026-04-29T10:00:02Z',
+                    'event': 'run_finished',
+                    'payload': {'done': True, 'stop_reason': 'finished', 'steps': 1},
+                    'session_id': 's1',
+                },
+            ]
+        )
+        self.assertIn('run_started', output)
+        self.assertIn('inspect runtime', output)
+        self.assertIn('step=1 step_succeeded', output)
+        self.assertIn('todo_write', output)
+        self.assertIn('allow', output)
+        self.assertIn('run_finished', output)
 
 
 if __name__ == '__main__':

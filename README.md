@@ -122,6 +122,7 @@ anvil --help
 anvil code --help
 anvil tools
 anvil --provider anthropic --model claude-3-opus-20240229
+anvil replay --session-id <session_id> --pretty --limit 20
 ```
 
 ## Runtime Layout

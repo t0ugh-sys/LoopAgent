@@ -1,4 +1,10 @@
 from .chat_runtime import InteractiveRuntime
+from .cli_commands import (
+    run_doctor_command,
+    run_replay_command,
+    run_skills_command,
+    run_tools_command,
+)
 from .coding_runtime import (
     build_coding_decider,
     build_coding_prompt,
@@ -16,6 +22,10 @@ from .session_runtime import (
 
 __all__ = [
     'InteractiveRuntime',
+    'run_doctor_command',
+    'run_replay_command',
+    'run_skills_command',
+    'run_tools_command',
     'build_coding_decider',
     'build_coding_prompt',
     'build_coding_summarizer',
