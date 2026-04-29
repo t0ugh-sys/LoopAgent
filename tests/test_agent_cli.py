@@ -11,7 +11,21 @@ from unittest.mock import patch
 import _bootstrap  # noqa: F401
 
 from anvil.agent_cli import _build_coding_decider, _run_code_command, _should_launch_interactive, build_parser
-from anvil.commands import execute_slash_command, parse_slash_command
+from anvil.commands import (
+    execute_slash_command,
+    format_event_summary,
+    format_history_summary,
+    format_permission_summary,
+    format_session_panel,
+    format_summary_text,
+    format_status_summary,
+    format_todo_summary,
+    parse_slash_command,
+)
+from anvil.services.event_viewer import render_event_row
+from anvil.services.catalog_service import render_skills, render_tools
+from anvil.services.replay_service import render_replay, resolve_events_file
+from anvil.services.team_service import parse_team_message, parse_teammate
 from anvil.session import SessionStore
 from anvil.skills import SkillLoader
 from anvil.tools import builtin_tool_specs
@@ -58,7 +72,41 @@ class AgentCliTests(unittest.TestCase):
     def test_should_parse_help_and_resume_slash_commands(self) -> None:
         self.assertEqual(parse_slash_command('/help').name, 'help')
         self.assertEqual(parse_slash_command('/resume now').argument, 'now')
+        self.assertEqual(parse_slash_command('/status').name, 'status')
+        self.assertEqual(parse_slash_command('/history 12').argument, '12')
+        self.assertEqual(parse_slash_command('/panel').name, 'panel')
         self.assertIsNone(parse_slash_command('plain text'))
+
+    def test_should_format_session_views(self) -> None:
+        tmp_dir = Path('D:/workspace/Anvil/.tmp') / f'session-view-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            session_store = SessionStore.create(
+                root_dir=tmp_dir,
+                workspace_root=tmp_dir,
+                goal='inspect runtime',
+                memory_run_dir=tmp_dir / 'memory',
+            )
+            session_store.state.last_summary = 'repo inspected'
+            session_store.state.permission_stats = {'allow': 2, 'deny': 1, 'ask': 3}
+            session_store.state.permission_cache = {'read_file:*': 'allow'}
+            session_store.state.todo_state = {
+                'items': [
+                    {'content': 'inspect repo', 'status': 'completed'},
+                    {'content': 'edit runtime', 'status': 'in_progress'},
+                ]
+            }
+            session_store.append_event('chat_user', {'role': 'user', 'content': 'hello'})
+            session_store.append_event('chat_assistant', {'role': 'assistant', 'content': 'hi'})
+            self.assertIn('session_id:', format_status_summary(session_store))
+            self.assertIn('recent_history:', format_history_summary(session_store))
+            self.assertIn('summary:\nrepo inspected', format_summary_text(session_store))
+            self.assertIn('recent_events:', format_event_summary(session_store))
+            self.assertIn('cached_rules: 1', format_permission_summary(session_store))
+            self.assertIn('[completed] inspect repo', format_todo_summary(session_store))
+            self.assertIn('permissions:', format_session_panel(session_store))
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
 
     def test_should_describe_tool_use_loop_in_code_help(self) -> None:
         parser = build_parser()
@@ -91,7 +139,7 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(args.base_url, 'https://example.com/v1')
 
     def test_should_execute_resume_slash_command(self) -> None:
-        tmp_dir = Path('tests/.tmp') / f'session-{uuid.uuid4().hex}'
+        tmp_dir = Path('D:/workspace/Anvil/.tmp') / f'session-{uuid.uuid4().hex}'
         tmp_dir.mkdir(parents=True, exist_ok=True)
         try:
             session_store = SessionStore.create(
@@ -101,6 +149,7 @@ class AgentCliTests(unittest.TestCase):
                 memory_run_dir=tmp_dir / 'memory',
             )
             session_store.append_event('chat_user', {'role': 'user', 'content': 'hello'})
+            session_store.state.permission_stats = {'allow': 1, 'deny': 0, 'ask': 0}
             result = execute_slash_command(
                 parse_slash_command('/resume'),
                 session_store=session_store,
@@ -109,6 +158,56 @@ class AgentCliTests(unittest.TestCase):
             self.assertIn('session_id:', result.output)
             self.assertIn('inspect runtime', result.output)
             self.assertIn('user: hello', result.output)
+            self.assertIn('permissions:', result.output)
+            self.assertIn('recent_events:', result.output)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_support_history_events_and_tool_filters(self) -> None:
+        tmp_dir = Path('D:/workspace/Anvil/.tmp') / f'session-cmds-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            session_store = SessionStore.create(
+                root_dir=tmp_dir,
+                workspace_root=tmp_dir,
+                goal='inspect runtime',
+                memory_run_dir=tmp_dir / 'memory',
+            )
+            session_store.state.last_summary = 'repo inspected'
+            session_store.append_event('chat_user', {'role': 'user', 'content': 'one'})
+            session_store.append_event('chat_assistant', {'role': 'assistant', 'content': 'two'})
+            history_result = execute_slash_command(
+                parse_slash_command('/history 1'),
+                session_store=session_store,
+                tool_specs=builtin_tool_specs(),
+            )
+            events_result = execute_slash_command(
+                parse_slash_command('/events 2'),
+                session_store=session_store,
+                tool_specs=builtin_tool_specs(),
+            )
+            tools_result = execute_slash_command(
+                parse_slash_command('/tools git'),
+                session_store=session_store,
+                tool_specs=builtin_tool_specs(),
+            )
+            summary_result = execute_slash_command(
+                parse_slash_command('/summary'),
+                session_store=session_store,
+                tool_specs=builtin_tool_specs(),
+            )
+            panel_result = execute_slash_command(
+                parse_slash_command('/panel'),
+                session_store=session_store,
+                tool_specs=builtin_tool_specs(),
+            )
+            self.assertIn('assistant: two', history_result.output)
+            self.assertNotIn('user: one', history_result.output)
+            self.assertIn('chat_assistant', events_result.output)
+            self.assertIn('git_status', tools_result.output)
+            self.assertNotIn('read_file', tools_result.output)
+            self.assertIn('repo inspected', summary_result.output)
+            self.assertIn('recent_events:', panel_result.output)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
@@ -200,6 +299,52 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(args.session_id, 's1')
         self.assertEqual(args.sessions_dir, '.sessions')
         self.assertEqual(args.permission_mode, 'unsafe')
+
+    def test_should_render_pretty_event_row(self) -> None:
+        text = render_event_row(
+            {
+                'ts': '2026-01-01T00:00:00Z',
+                'event': 'step_succeeded',
+                'tool_name': 'read_file',
+                'permission_decision': 'allow',
+                'session_id': 'sess-1',
+            }
+        )
+        self.assertIn('step_succeeded', text)
+        self.assertIn('[read_file]', text)
+        self.assertIn('permission=allow', text)
+        self.assertIn('session=sess-1', text)
+
+    def test_should_render_catalog_outputs(self) -> None:
+        tools_text = render_tools(verbose=False)
+        skills_text = render_skills()
+        self.assertIn('read_file', tools_text)
+        self.assertIn('Available skills:', skills_text)
+
+    def test_should_resolve_and_render_replay(self) -> None:
+        tmp_dir = Path('D:/workspace/Anvil/.tmp') / f'replay-svc-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            events_dir = tmp_dir / 'sessions' / 'sess-1'
+            events_dir.mkdir(parents=True, exist_ok=True)
+            events_file = events_dir / 'events.jsonl'
+            events_file.write_text(json.dumps({'ts': '2026-01-01T00:00:00Z', 'event': 'run_started'}) + '\n', encoding='utf-8')
+            resolved = resolve_events_file(events_file='', session_id='sess-1', sessions_dir=str(tmp_dir / 'sessions'))
+            self.assertEqual(resolved, events_file)
+            pretty = render_replay(events_file=events_file, pretty=True, limit=5)
+            raw = render_replay(events_file=events_file, pretty=False, limit=None)
+            self.assertIn('run_started', pretty)
+            self.assertIn('"event": "run_started"', raw)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_parse_team_inputs(self) -> None:
+        self.assertEqual(parse_teammate('dev:coder'), ('dev', 'coder'))
+        self.assertEqual(parse_team_message('lead=ship it'), ('lead', 'ship it'))
+        with self.assertRaises(ValueError):
+            parse_teammate('broken')
+        with self.assertRaises(ValueError):
+            parse_team_message('broken')
 
     def test_should_record_structured_tool_events(self) -> None:
         parser = build_parser()
@@ -363,6 +508,40 @@ class AgentCliTests(unittest.TestCase):
             replay_text = replay_buffer.getvalue()
             self.assertIn('"event": "run_started"', replay_text)
             self.assertIn(payload['session_id'], replay_text)
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
+    def test_should_pretty_replay_events_from_session_file(self) -> None:
+        tmp_dir = Path('D:/workspace/Anvil/.tmp') / f'replay-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        events_file = tmp_dir / 'events.jsonl'
+        try:
+            events_file.write_text(
+                '\n'.join(
+                    [
+                        json.dumps({'ts': '2026-01-01T00:00:00Z', 'event': 'run_started', 'session_id': 'sess-1'}),
+                        json.dumps(
+                            {
+                                'ts': '2026-01-01T00:00:01Z',
+                                'event': 'step_succeeded',
+                                'tool_name': 'read_file',
+                                'permission_decision': 'allow',
+                                'session_id': 'sess-1',
+                            }
+                        ),
+                    ]
+                ),
+                encoding='utf-8',
+            )
+            parser = build_parser()
+            replay_args = parser.parse_args(['replay', '--events-file', str(events_file), '--pretty', '--limit', '1'])
+            replay_buffer = io.StringIO()
+            with patch('sys.stdout', replay_buffer):
+                self.assertEqual(replay_args.handler(replay_args), 0)
+            replay_text = replay_buffer.getvalue()
+            self.assertIn('step_succeeded', replay_text)
+            self.assertIn('[read_file]', replay_text)
+            self.assertNotIn('run_started', replay_text)
         finally:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 

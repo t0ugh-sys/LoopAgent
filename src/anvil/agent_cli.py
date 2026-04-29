@@ -3,19 +3,30 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import time
 from datetime import datetime, timezone
-from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from .entrypoints.parser_builders import (
+    register_doctor_parser,
+    register_replay_parser,
+    register_skills_parser,
+    register_tools_parser,
+)
 from .llm.providers import build_invoke_from_args
-from .ops.doctor import format_doctor_report, run_provider_doctor
+from .services.catalog_service import render_skills, render_tools
 from .services import coding_runtime as _coding_runtime
+from .services.replay_service import render_replay, resolve_events_file
 from .services.session_runtime import should_launch_interactive as _should_launch_interactive
-from .skills import get_skill, list_skills
-from .task_graph import Task
-from .team_runtime import PersistentTeamRuntime, PersistentTeammateSpec
-from .tools import build_default_tools, builtin_tool_specs
+from .services.team_service import (
+    run_team_add_task_command as _team_service_run_team_add_task_command,
+    run_team_broadcast_command as _team_service_run_team_broadcast_command,
+    run_team_run_command as _team_service_run_team_run_command,
+    run_team_send_command as _team_service_run_team_send_command,
+    run_team_serve_command as _team_service_run_team_serve_command,
+    run_team_shutdown_command as _team_service_run_team_shutdown_command,
+)
+from .ops.doctor import format_doctor_report, run_provider_doctor
+from .tools import builtin_tool_specs
 
 
 def _default_run_id() -> str:
@@ -69,251 +80,58 @@ def _run_code_command(args: argparse.Namespace) -> int:
     return _coding_runtime.run_code_command(args)
 
 
-def _parse_teammate(value: str) -> Tuple[str, str]:
-    raw = value.strip()
-    if ':' not in raw:
-        raise ValueError('teammate must be NAME:ROLE')
-    name, role = raw.split(':', 1)
-    name = name.strip()
-    role = role.strip()
-    if not name or not role:
-        raise ValueError('teammate must be NAME:ROLE')
-    return name, role
-
-
-def _parse_team_message(value: str) -> Tuple[str, str]:
-    raw = value.strip()
-    if '=' not in raw:
-        raise ValueError('message must be TARGET=BODY')
-    target, body = raw.split('=', 1)
-    target = target.strip()
-    body = body.strip()
-    if not target or not body:
-        raise ValueError('message must be TARGET=BODY')
-    return target, body
-
-
 def _run_team_run_command(args: argparse.Namespace) -> int:
-    runtime, team_root, teammate_specs = _spawn_team_runtime(args)
-    _append_startup_tasks(runtime, args.task, args.sender)
-
-    expected_replies = 0
-    task_mode = bool(args.task)
-    for item in args.message:
-        recipient, body = _parse_team_message(item)
-        runtime.send_message(recipient, body, sender=args.sender)
-        expected_replies += 1
-    for body in args.broadcast:
-        runtime.broadcast(body, sender=args.sender)
-        expected_replies += len(teammate_specs)
-
-    replies: List[Dict[str, Any]] = []
-    deadline = datetime.now(timezone.utc).timestamp() + args.service_timeout_s
-    try:
-        while datetime.now(timezone.utc).timestamp() < deadline:
-            inbox = runtime.inbox_store.drain(args.sender)
-            for item in inbox:
-                replies.append(item.to_dict())
-            tasks_still_active = task_mode and runtime.has_active_tasks()
-            if expected_replies > 0 and len(replies) >= expected_replies and not tasks_still_active:
-                break
-            if expected_replies == 0 and not tasks_still_active:
-                break
-            time.sleep(args.poll_interval_s)
-    finally:
-        runtime.shutdown_all(sender=args.sender, timeout_s=min(5.0, args.service_timeout_s))
-
-    payload = {
-        'team_dir': str(team_root),
-        'members': [member.to_dict() for member in runtime.config_store.load().members],
-        'replies': replies,
-        'tasks': runtime.load_task_graph().to_dict().get('tasks', []),
-    }
-    if args.output == 'json':
-        print(json.dumps(payload, ensure_ascii=False))
-    else:
-        print(f'team_dir: {team_root}')
-        print(f'members: {[member["name"] for member in payload["members"]]}')
-        for reply in replies:
-            print(f'{reply["sender"]} -> {reply["recipient"]}: {reply["body"]}')
-    return 0
-
-
-def _spawn_team_runtime(args: argparse.Namespace) -> tuple[PersistentTeamRuntime, Path, list[PersistentTeammateSpec]]:
-    workspace_root = Path(args.workspace).resolve()
-    team_root = (workspace_root / args.team_dir).resolve()
-    runtime = PersistentTeamRuntime(team_root)
-    decider = _build_coding_decider(args, _load_skills_from_args(args))
-    teammate_specs: List[PersistentTeammateSpec] = []
-    for item in args.teammate:
-        name, role = _parse_teammate(item)
-        teammate_specs.append(
-            PersistentTeammateSpec(
-                name=name,
-                role=role,
-                workspace_root=workspace_root,
-                decider=decider,
-                stop=StopConfig(max_steps=args.max_steps, max_elapsed_s=args.timeout_s),
-                skills=tuple(args.skills),
-            )
-        )
-    for spec in teammate_specs:
-        runtime.spawn_teammate(spec)
-    return runtime, team_root, teammate_specs
-
-
-def _append_startup_tasks(runtime: PersistentTeamRuntime, task_bodies: List[str], sender: str) -> None:
-    if not task_bodies:
-        return
-    runtime.replace_task_graph(
-        [
-            Task(id=f'task_{index}', title=body, goal=body)
-            for index, body in enumerate(task_bodies, start=1)
-        ]
+    return _team_service_run_team_run_command(
+        args,
+        decider_builder=_build_coding_decider,
+        skills_loader=_load_skills_from_args,
     )
-    runtime.dispatch_ready_tasks(sender=sender)
 
 
 def _run_team_serve_command(args: argparse.Namespace) -> int:
-    runtime, team_root, teammate_specs = _spawn_team_runtime(args)
-    _append_startup_tasks(runtime, args.task, args.sender)
-    for item in args.message:
-        recipient, body = _parse_team_message(item)
-        runtime.send_message(recipient, body, sender=args.sender)
-    for body in args.broadcast:
-        runtime.broadcast(body, sender=args.sender)
-
-    replies: List[Dict[str, Any]] = []
-    deadline = datetime.now(timezone.utc).timestamp() + args.service_timeout_s if args.service_timeout_s > 0 else None
-    idle_since = datetime.now(timezone.utc).timestamp()
-    try:
-        while True:
-            runtime.dispatch_ready_tasks(sender='scheduler')
-            inbox = runtime.inbox_store.drain(args.sender)
-            for item in inbox:
-                replies.append(item.to_dict())
-
-            active = runtime.has_active_tasks() or runtime.has_pending_member_messages()
-            if active:
-                idle_since = datetime.now(timezone.utc).timestamp()
-            if args.idle_exit_s > 0 and not active and (datetime.now(timezone.utc).timestamp() - idle_since) >= args.idle_exit_s:
-                break
-            if deadline is not None and datetime.now(timezone.utc).timestamp() >= deadline:
-                break
-            if runtime.all_teammates_shutdown():
-                break
-            time.sleep(args.poll_interval_s)
-    finally:
-        if not runtime.all_teammates_shutdown():
-            runtime.shutdown_all(sender=args.sender, timeout_s=min(5.0, args.timeout_s))
-
-    payload = {
-        'team_dir': str(team_root),
-        'mode': 'service',
-        'members': [member.to_dict() for member in runtime.config_store.load().members],
-        'replies': replies,
-        'tasks': runtime.load_task_graph().to_dict().get('tasks', []),
-        'teammates': [spec.name for spec in teammate_specs],
-    }
-    if args.output == 'json':
-        print(json.dumps(payload, ensure_ascii=False))
-    else:
-        print(f'team_dir: {team_root}')
-        print(f'mode: service')
-        print(f'teammates: {[spec.name for spec in teammate_specs]}')
-        print(f'replies: {len(replies)}')
-    return 0
+    return _team_service_run_team_serve_command(
+        args,
+        decider_builder=_build_coding_decider,
+        skills_loader=_load_skills_from_args,
+    )
 
 
 def _run_team_add_task_command(args: argparse.Namespace) -> int:
-    workspace_root = Path(args.workspace).resolve()
-    runtime = PersistentTeamRuntime((workspace_root / args.team_dir).resolve())
-    metadata: Dict[str, Any] = {}
-    if args.role:
-        metadata['role'] = args.role
-    task = Task(
-        id=args.task_id or f'task_{datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")}',
-        title=args.title or args.goal,
-        goal=args.goal,
-        dependencies=tuple(args.depends_on),
-        assignee=args.assignee or None,
-        metadata=metadata,
-    )
-    graph = runtime.add_task(task)
-    runtime.dispatch_ready_tasks(sender=args.sender)
-    payload = {
-        'team_dir': str((workspace_root / args.team_dir).resolve()),
-        'task': graph.get_task(task.id).to_dict(),
-    }
-    if args.output == 'json':
-        print(json.dumps(payload, ensure_ascii=False))
-    else:
-        print(f'added task: {task.id}')
-    return 0
+    return _team_service_run_team_add_task_command(args)
 
 
 def _run_team_send_command(args: argparse.Namespace) -> int:
-    workspace_root = Path(args.workspace).resolve()
-    runtime = PersistentTeamRuntime((workspace_root / args.team_dir).resolve())
-    runtime.send_message(args.to, args.message, sender=args.sender)
-    print('ok')
-    return 0
+    return _team_service_run_team_send_command(args)
 
 
 def _run_team_broadcast_command(args: argparse.Namespace) -> int:
-    workspace_root = Path(args.workspace).resolve()
-    runtime = PersistentTeamRuntime((workspace_root / args.team_dir).resolve())
-    runtime.broadcast(args.message, sender=args.sender)
-    print('ok')
-    return 0
+    return _team_service_run_team_broadcast_command(args)
 
 
 def _run_team_shutdown_command(args: argparse.Namespace) -> int:
-    workspace_root = Path(args.workspace).resolve()
-    runtime = PersistentTeamRuntime((workspace_root / args.team_dir).resolve())
-    if args.all:
-        runtime.shutdown_all(sender=args.sender, timeout_s=args.timeout_s)
-    else:
-        runtime.shutdown_teammate(args.to, sender=args.sender)
-    print('ok')
-    return 0
+    return _team_service_run_team_shutdown_command(args)
 
 
 def _run_tools_command(args: argparse.Namespace) -> int:
-    specs = sorted(builtin_tool_specs(), key=lambda item: item.name)
-    if getattr(args, 'verbose', False):
-        for item in specs:
-            capabilities = ','.join(cap.value for cap in item.capabilities) or 'none'
-            print(f'{item.name}: {item.description} [{capabilities}] risk={item.risk_level.value}')
-        return 0
-    names = sorted(build_default_tools().keys())
-    print('\n'.join(names))
+    print(render_tools(verbose=getattr(args, 'verbose', False)))
     return 0
 
 
 def _run_skills_command(_: argparse.Namespace) -> int:
-    """List all available skills."""
-    skills = list_skills()
-    print("Available skills:")
-    for name in skills:
-        skill = get_skill(name)
-        if skill:
-            print(f"  - {name}: {skill.description}")
-    print("\nUse --skill <name> to load specific skills")
-    print("Use --skill all to load all skills")
+    print(render_skills())
     return 0
 
 
 def _run_replay_command(args: argparse.Namespace) -> int:
-    events_file_value = getattr(args, 'events_file', '')
-    if getattr(args, 'session_id', ''):
-        events_file = Path(args.sessions_dir) / args.session_id / 'events.jsonl'
-    else:
-        events_file = Path(events_file_value)
+    events_file = resolve_events_file(
+        events_file=getattr(args, 'events_file', ''),
+        session_id=getattr(args, 'session_id', ''),
+        sessions_dir=str(args.sessions_dir),
+    )
     if not events_file.exists():
         print(f'events file not found: {events_file}')
         return 1
-    print(events_file.read_text(encoding='utf-8'))
+    print(render_replay(events_file=events_file, pretty=getattr(args, 'pretty', False), limit=getattr(args, 'limit', None)))
     return 0
 
 
@@ -418,30 +236,9 @@ def build_parser() -> argparse.ArgumentParser:
         help='Skills to load into the tool dispatch (web_search, memory, files, commands, browser, or "all")',
     )
 
-    tools = subparsers.add_parser(
-        'tools',
-        help='list tools exposed to the loop',
-        description='List tool handlers available to the coding tool-use loop.',
-    )
-    tools.add_argument('--verbose', action='store_true', help='Show tool descriptions and capability metadata')
-    tools.set_defaults(handler=_run_tools_command)
-
-    skills_parser = subparsers.add_parser(
-        'skills',
-        help='list available skills',
-        description='List optional skills that can extend the loop tool dispatch.',
-    )
-    skills_parser.set_defaults(handler=_run_skills_command)
-
-    replay = subparsers.add_parser(
-        'replay',
-        help='print recorded loop events',
-        description='Print a recorded JSONL event stream for a previous tool-use run.',
-    )
-    replay.add_argument('--events-file', default='')
-    replay.add_argument('--session-id', default='')
-    replay.add_argument('--sessions-dir', default='.anvil/sessions')
-    replay.set_defaults(handler=_run_replay_command)
+    register_tools_parser(subparsers, handler=_run_tools_command)
+    register_skills_parser(subparsers, handler=_run_skills_command)
+    register_replay_parser(subparsers, handler=_run_replay_command)
 
     team = subparsers.add_parser(
         'team',
@@ -565,20 +362,7 @@ def build_parser() -> argparse.ArgumentParser:
     team_add_task.add_argument('--output', choices=['text', 'json'], default='text')
     team_add_task.set_defaults(handler=_run_team_add_task_command)
 
-    doctor = subparsers.add_parser(
-        'doctor',
-        help='diagnose provider connectivity',
-        description='Diagnose provider connectivity before running the tool-use loop.',
-    )
-    doctor.add_argument('--provider', choices=['openai_compatible'], default='openai_compatible')
-    doctor.add_argument('--model', default='gpt-5.3-codex')
-    doctor.add_argument('--base-url', required=True)
-    doctor.add_argument('--wire-api', choices=['chat_completions', 'responses'], default='responses')
-    doctor.add_argument('--api-key-env', default='OPENAI_API_KEY')
-    doctor.add_argument('--provider-timeout-s', type=float, default=20.0)
-    doctor.add_argument('--provider-header', action='append', default=[])
-    doctor.add_argument('--output', choices=['text', 'json'], default='text')
-    doctor.set_defaults(handler=_run_doctor_command)
+    register_doctor_parser(subparsers, handler=_run_doctor_command)
 
     code.set_defaults(handler=_run_code_command)
     return parser

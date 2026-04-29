@@ -25,7 +25,7 @@ class InteractiveRuntime:
             f'Anvil interactive session {self.session_store.state.session_id} '
             f'({self.session_store.state.workspace_root})'
         )
-        self._write_line('Type /help for commands.')
+        self._write_line('Type /help for commands. Useful: /panel, /status, /summary, /history 5, /events 5.')
         while True:
             self._write('anvil> ')
             line = self.stdin.readline()

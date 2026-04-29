@@ -95,7 +95,14 @@ The default `anvil` entrypoint starts an interactive session-first runtime. It p
 
 ```text
 /help
+/status
+/summary
+/history
+/events
+/permissions
+/todo
 /tools
+/panel
 /resume
 /exit
 ```
@@ -114,6 +121,7 @@ Useful first commands:
 anvil --help
 anvil code --help
 anvil tools
+anvil replay --session-id <session_id> --pretty --limit 20
 ```
 
 ## Runtime Layout
