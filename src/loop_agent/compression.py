@@ -503,6 +503,15 @@ class CompactManager:
         self._state = CompactState()
         self._requested = False
         self._request_reason = ''
+
+    @property
+    def requested(self) -> bool:
+        """Compatibility shim for harness callers that inspect request state directly."""
+        return self._requested
+
+    @property
+    def reason(self) -> str:
+        return self._request_reason
     
     def request(self, reason: str = '') -> None:
         """请求压缩"""
@@ -567,6 +576,7 @@ class CompactManager:
                 self._state.reason = CompactReason.TOKEN_LIMIT
             
             self._requested = False
+            self._request_reason = ''
             
             return CompactResult(
                 ok=True,
