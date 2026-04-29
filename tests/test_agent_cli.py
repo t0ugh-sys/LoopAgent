@@ -60,6 +60,8 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(parse_slash_command('/help').name, 'help')
         self.assertEqual(parse_slash_command('/resume now').argument, 'now')
         self.assertEqual(parse_slash_command('/provider anthropic').argument, 'anthropic')
+        self.assertEqual(parse_slash_command('/config').name, 'config')
+        self.assertEqual(parse_slash_command('/wire-api responses').argument, 'responses')
         self.assertIsNone(parse_slash_command('plain text'))
 
     def test_should_describe_tool_use_loop_in_code_help(self) -> None:

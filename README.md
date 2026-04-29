@@ -95,10 +95,17 @@ The default `anvil` entrypoint starts an interactive session-first runtime. It p
 
 ```text
 /help
+/config
+/provider anthropic
+/model claude-3-opus-20240229
+/wire-api responses
+/base-url https://api.openai.com/v1
 /tools
 /resume
 /exit
 ```
+
+You can switch provider and model during the same interactive session. The current runtime config is persisted in the session and restored on resume.
 
 `anvil code ...` remains the explicit non-interactive batch runtime.
 
@@ -114,6 +121,7 @@ Useful first commands:
 anvil --help
 anvil code --help
 anvil tools
+anvil --provider anthropic --model claude-3-opus-20240229
 ```
 
 ## Runtime Layout
@@ -186,47 +194,27 @@ Example:
 python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider mock --model qwen-max
 ```
 
-## Provider Examples
+## Providers
 
-### OpenAI-compatible
+Pick a provider and model at startup:
 
 ```bash
-set OPENAI_API_KEY=sk-xxx
+anvil --provider anthropic --model claude-3-opus-20240229
 python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-4o-mini --base-url https://api.openai.com/v1 --wire-api chat_completions
-```
-
-### Responses API
-
-```bash
-set OPENAI_API_KEY=sk-xxx
 python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses
 ```
 
-### Extra provider headers
+Switch runtime config inside an interactive session:
 
-```bash
-python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --provider-header "x-tenant:my-team" --provider-header "x-trace-id:demo-1"
+```text
+/config
+/provider anthropic
+/model claude-3-opus-20240229
+/wire-api responses
+/base-url https://api.openai.com/v1
 ```
 
-### Retries and fallback model
-
-```bash
-python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider openai_compatible --model gpt-5.3-codex --fallback-model gpt-5-codex --base-url https://codex-api.packycode.com/v1 --wire-api responses --max-retries 3 --retry-backoff-s 1.0 --retry-http-code 502 --retry-http-code 503
-```
-
-### Anthropic
-
-```bash
-set ANTHROPIC_API_KEY=sk-ant-xxx
-python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider anthropic --model claude-3-opus-20240229
-```
-
-### Gemini
-
-```bash
-set GEMINI_API_KEY=xxx
-python -m anvil.cli --goal "answer in json protocol" --strategy json_llm --provider gemini --model gemini-pro
-```
+Extra provider headers, retries, and fallback models are still available through the `code` command flags when needed.
 
 ## Run Recording and Memory
 
