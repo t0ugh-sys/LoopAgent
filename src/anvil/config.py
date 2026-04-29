@@ -62,8 +62,6 @@ def load_env_config(path: PathLike) -> Dict[str, Any]:
                 # Map to config keys
                 if key.startswith('ANVIL_'):
                     config[key[6:].lower()] = value
-                elif key.startswith('LOOPAGENT_'):
-                    config[key[10:].lower()] = value
                 elif key.startswith('OPENAI_'):
                     config[key.lower()] = value
                 elif key.startswith('ANTHROPIC_'):
@@ -81,12 +79,6 @@ DEFAULT_CONFIG_LOCATIONS = [
     './.anvil.yaml',
     './.anvil.yml',
     './.anvil.json',
-    './loopagent.yaml',
-    './loopagent.yml',
-    './loopagent.json',
-    './.loopagent.yaml',
-    './.loopagent.yml',
-    './.loopagent.json',
 ]
 
 
@@ -99,7 +91,6 @@ def find_default_config() -> Optional[Path]:
     # Check home directory
     home_candidates = [
         Path.home() / '.anvil' / 'config.yaml',
-        Path.home() / '.loopagent' / 'config.yaml',
     ]
     for home_config in home_candidates:
         if home_config.exists():

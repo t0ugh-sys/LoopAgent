@@ -1,10 +1,10 @@
 """
-API Usage Example for LoopAgent
+API Usage Example for Anvil
 
 Demonstrates the high-level API for programmatic use.
 """
 
-from loop_agent.api import create_agent, run_goal, AgentConfig, LoopAgentAPI
+from anvil.api import create_agent, run_goal, AgentConfig, AnvilAPI
 
 
 def example_quick_start():
@@ -78,7 +78,7 @@ def example_with_config():
     )
     config.validate()
     
-    agent = LoopAgentAPI(config)
+    agent = AnvilAPI(config)
     result = agent.run("Your goal")
     print(result.to_dict())
 

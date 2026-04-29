@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional
 
 from .compression import CompressionConfig
-from .core.agent import LoopAgent
+from .core.agent import AnvilAgent
 from .core.types import ContextProviderFn, ObserverFn, RunResult, StopConfig
 from .policies import ToolPolicy
 from .task_store import TaskStore
@@ -69,7 +69,7 @@ def run_coding_agent(
         transcripts_dir=transcripts_dir,
         summarizer=summarizer,
     )
-    agent = LoopAgent(step=step, stop=stop or StopConfig(max_steps=20, max_elapsed_s=60.0))
+    agent = AnvilAgent(step=step, stop=stop or StopConfig(max_steps=20, max_elapsed_s=60.0))
     return agent.run(
         goal=goal,
         initial_state=CodingAgentState(),

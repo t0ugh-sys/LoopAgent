@@ -86,7 +86,7 @@ def run_provider_doctor(
 
     endpoint = '/responses' if wire_api == 'responses' else '/chat/completions'
     endpoint_headers = dict(headers)
-    endpoint_headers['x-loopagent-model'] = model
+    endpoint_headers['x-anvil-model'] = model
     endpoint_probe = _http_probe(base_url.rstrip('/') + endpoint, headers=endpoint_headers, timeout_s=timeout_s)
 
     return {

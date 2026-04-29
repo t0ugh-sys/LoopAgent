@@ -5,7 +5,7 @@ Skills are pluggable capabilities that can be loaded dynamically.
 Each skill provides tools and/or prompt enhancements for the agent.
 
 Usage:
-    from loop_agent.skills import load_skill, build_skill_tools
+    from anvil.skills import load_skill, build_skill_tools
     
     # Load a built-in skill
     load_skill('web_search')
@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Callable
 
-from loop_agent.agent_protocol import ToolResult
+from anvil.agent_protocol import ToolResult
 
 
 # Skill definition
@@ -188,7 +188,7 @@ class WebSearchSkill(Skill):
     description = "Search the web and fetch URLs"
     
     def get_tools(self) -> dict[str, Callable]:
-        from loop_agent.tools import web_search_tool, fetch_url_tool
+        from anvil.tools import web_search_tool, fetch_url_tool
         return {
             'web_search': web_search_tool,
             'fetch_url': fetch_url_tool,
@@ -201,7 +201,7 @@ class MemorySkill(Skill):
     description = "Analyze past runs and learn patterns"
     
     def get_tools(self) -> dict[str, Callable]:
-        from loop_agent.tools import analyze_memory_tool
+        from anvil.tools import analyze_memory_tool
         return {
             'analyze_memory': analyze_memory_tool,
         }
@@ -213,7 +213,7 @@ class FileSkill(Skill):
     description = "Read, write, and search files"
     
     def get_tools(self) -> dict[str, Callable]:
-        from loop_agent.tools import read_file_tool, write_file_tool, apply_patch_tool, search_tool
+        from anvil.tools import read_file_tool, write_file_tool, apply_patch_tool, search_tool
         return {
             'read_file': read_file_tool,
             'write_file': write_file_tool,
@@ -228,7 +228,7 @@ class CommandSkill(Skill):
     description = "Run shell commands"
     
     def get_tools(self) -> dict[str, Callable]:
-        from loop_agent.tools import run_command_tool
+        from anvil.tools import run_command_tool
         return {
             'run_command': run_command_tool,
         }
@@ -292,7 +292,7 @@ class SkillLoader:
         try:
             # Try importing as a module
             import importlib
-            module = importlib.import_module(f'loopagent_skills.{name}')
+            module = importlib.import_module(f'anvil_skills.{name}')
             
             if hasattr(module, 'Skill'):
                 skill = module.Skill()

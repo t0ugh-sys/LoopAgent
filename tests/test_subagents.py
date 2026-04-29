@@ -8,12 +8,12 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.llm.providers import _mock_invoke_factory
-from loop_agent.mailbox import JsonlMailbox
-from loop_agent.subagents import SubAgentRuntime, SubAgentSpec
-from loop_agent.task_graph import Task, TaskGraph, TaskStatus
-from loop_agent.task_store import TaskStore
-from loop_agent.worktree_manager import WorktreeManager
+from anvil.llm.providers import _mock_invoke_factory
+from anvil.mailbox import JsonlMailbox
+from anvil.subagents import SubAgentRuntime, SubAgentSpec
+from anvil.task_graph import Task, TaskGraph, TaskStatus
+from anvil.task_store import TaskStore
+from anvil.worktree_manager import WorktreeManager
 
 
 def _build_mock_decider():

@@ -33,8 +33,8 @@ function isSupportedVersion(version) {
 
 function detectPython() {
   const candidates = [];
-  if (process.env.LOOPAGENT_PYTHON) {
-    candidates.push({ cmd: process.env.LOOPAGENT_PYTHON, args: [], shell: true });
+  if (process.env.ANVIL_PYTHON) {
+    candidates.push({ cmd: process.env.ANVIL_PYTHON, args: [], shell: true });
   }
   candidates.push({ cmd: 'python', args: [], shell: false });
   candidates.push({ cmd: 'python3', args: [], shell: false });
@@ -62,7 +62,7 @@ function readPackageVersion() {
 }
 
 function shouldInstall() {
-  if (process.env.LOOPAGENT_FORCE_REINSTALL === '1') return true;
+  if (process.env.ANVIL_FORCE_REINSTALL === '1') return true;
   if (!fs.existsSync(path.join(VENV_DIR, 'pyvenv.cfg'))) return true;
   if (!fs.existsSync(MARKER_FILE)) return true;
   try {
@@ -120,7 +120,7 @@ function installPythonRuntime(pythonCandidate) {
 function ensureRuntime() {
   const pythonCandidate = detectPython();
   if (!pythonCandidate) {
-    console.error('Anvil requires Python 3.11+ (set LOOPAGENT_PYTHON if needed).');
+    console.error('Anvil requires Python 3.11+ (set ANVIL_PYTHON if needed).');
     process.exit(1);
   }
   if (shouldInstall()) {
@@ -128,16 +128,16 @@ function ensureRuntime() {
   }
 }
 
-function runLoopAgentCLI(userArgs) {
+function runAnvilCLI(userArgs) {
   const py = venvPythonPath();
-  const args = ['-m', 'loop_agent.agent_cli', ...userArgs];
+  const args = ['-m', 'anvil.agent_cli', ...userArgs];
   const child = cp.spawn(py, args, { stdio: 'inherit' });
   child.on('exit', (code) => process.exit(code === null ? 1 : code));
 }
 
 function main() {
   ensureRuntime();
-  runLoopAgentCLI(process.argv.slice(2));
+  runAnvilCLI(process.argv.slice(2));
 }
 
 main();

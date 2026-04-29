@@ -28,15 +28,14 @@ dev = []
 tui = ["textual>=0.86.2"]
 
 [project.scripts]
-anvil = "loop_agent.agent_cli:main"
-anvil-core = "loop_agent.cli:main"
-anvil-chat = "loop_agent.ui.tui_chat:main"
-loopagent = "loop_agent.cli:main"
+anvil = "anvil.agent_cli:main"
+anvil-core = "anvil.cli:main"
+anvil-chat = "anvil.ui.tui_chat:main"
 
 [project.urls]
-Homepage = "https://github.com/t0ugh-sys/LoopAgent"
-Repository = "https://github.com/t0ugh-sys/LoopAgent"
-Issues = "https://github.com/t0ugh-sys/LoopAgent/issues"
+Homepage = "https://github.com/t0ugh-sys/Anvil"
+Repository = "https://github.com/t0ugh-sys/Anvil"
+Issues = "https://github.com/t0ugh-sys/Anvil/issues"
 
 [tool.setuptools]
 package-dir = { "" = "src" }
@@ -45,4 +44,4 @@ package-dir = { "" = "src" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-loop_agent = ["py.typed"]
+anvil = ["py.typed"]

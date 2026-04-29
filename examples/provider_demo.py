@@ -1,10 +1,10 @@
 """
-Provider Examples for LoopAgent
+Provider Examples for Anvil
 
 Demonstrates how to use different LLM providers.
 """
 
-from loop_agent.llm.providers import (
+from anvil.llm.providers import (
     build_invoke_from_args,
     get_provider,
     list_providers,

@@ -5,7 +5,7 @@
 - `skills/`: human-readable skill contracts and boundaries
 - `docs/`: architecture and artifact references
 - `examples/`: integration-oriented demos
-- `src/loop_agent/`: runtime package
+- `src/anvil/`: runtime package
 - `tests/`: unit and structural tests
 
 ## Runtime Package

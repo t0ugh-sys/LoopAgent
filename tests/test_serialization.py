@@ -5,8 +5,8 @@ import unittest
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.core.serialization import run_result_to_dict, run_result_to_json
-from loop_agent.core.types import RunResult, StopReason
+from anvil.core.serialization import run_result_to_dict, run_result_to_json
+from anvil.core.types import RunResult, StopReason
 
 
 class SerializationTests(unittest.TestCase):

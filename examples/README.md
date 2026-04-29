@@ -1,6 +1,6 @@
-# LoopAgent Examples
+# Anvil Examples
 
-This directory contains various examples for using LoopAgent.
+This directory contains various examples for Anvil.
 
 ## Quick Examples
 
@@ -48,11 +48,11 @@ pip install -e .
 python examples/json_loop_stub_demo.py
 
 # Run with config
-python -m loop_agent.agent_cli code --config config.yaml --goal "your goal"
+python -m anvil.agent_cli code --config config.yaml --goal "your goal"
 
 # Use docker
-docker build -t loopagent .
-docker run loopagent --goal "your goal"
+docker build -t anvil .
+docker run anvil --goal "your goal"
 ```
 
 ## Advanced Usage
@@ -60,7 +60,7 @@ docker run loopagent --goal "your goal"
 ### Custom Prompt Template
 
 ```python
-from loop_agent.prompts import PromptTemplate, register_template
+from anvil.prompts import PromptTemplate, register_template
 
 my_template = PromptTemplate(
     name="my_agent",
@@ -73,7 +73,7 @@ register_template(my_template)
 ### Custom Skill
 
 ```python
-from loop_agent.skills import Skill, register_skill
+from anvil.skills import Skill, register_skill
 
 class MySkill(Skill):
     name = "my_skill"

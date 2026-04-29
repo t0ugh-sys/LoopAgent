@@ -7,7 +7,7 @@ import uuid
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.memory.jsonl_store import JsonlMemoryStore
+from anvil.memory.jsonl_store import JsonlMemoryStore
 
 
 class MemoryStoreTests(unittest.TestCase):

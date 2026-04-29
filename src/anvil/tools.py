@@ -39,7 +39,6 @@ ToolRegistration = Tuple[str, ToolFn]
 _SEARCH_SKIP_DIRS = {
     '.git',
     '.anvil',
-    '.loopagent',
     '.mypy_cache',
     '.pytest_cache',
     '.ruff_cache',

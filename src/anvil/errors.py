@@ -10,9 +10,9 @@ from enum import Enum
 from typing import Any
 
 
-class LoopAgentError(Exception):
+class AnvilError(Exception):
     """Base exception for Anvil."""
-    code: str = "LOOP_AGENT_ERROR"
+    code: str = "anvil_ERROR"
     
     def __init__(self, message: str, details: dict[str, Any] | None = None):
         super().__init__(message)
@@ -20,32 +20,32 @@ class LoopAgentError(Exception):
         self.details = details or {}
 
 
-class ConfigError(LoopAgentError):
+class ConfigError(AnvilError):
     """Configuration related errors."""
     code = "CONFIG_ERROR"
 
 
-class ProviderError(LoopAgentError):
+class ProviderError(AnvilError):
     """LLM provider related errors."""
     code = "PROVIDER_ERROR"
 
 
-class ToolError(LoopAgentError):
+class ToolError(AnvilError):
     """Tool execution related errors."""
     code = "TOOL_ERROR"
 
 
-class ValidationError(LoopAgentError):
+class ValidationError(AnvilError):
     """Input validation errors."""
     code = "VALIDATION_ERROR"
 
 
-class MemoryError(LoopAgentError):
+class MemoryError(AnvilError):
     """Memory/storage related errors."""
     code = "MEMORY_ERROR"
 
 
-class SkillError(LoopAgentError):
+class SkillError(AnvilError):
     """Skill loading/execution errors."""
     code = "SKILL_ERROR"
 
@@ -91,7 +91,7 @@ class ErrorCode(Enum):
 
 def format_error(error: Exception) -> dict[str, Any]:
     """Format an exception into a dictionary for JSON output."""
-    if isinstance(error, LoopAgentError):
+    if isinstance(error, AnvilError):
         return {
             "error": error.message,
             "code": error.code,

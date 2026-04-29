@@ -1,4 +1,4 @@
-from .agent import LoopAgent
+from .agent import AnvilAgent
 from .serialization import run_result_to_dict, run_result_to_json
 from .types import (
     CancelFn,
@@ -14,7 +14,7 @@ from .types import (
 )
 
 __all__ = [
-    'LoopAgent',
+    'AnvilAgent',
     'CancelFn',
     'ContextProviderFn',
     'ContextSnapshot',

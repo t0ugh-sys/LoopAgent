@@ -8,7 +8,7 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.session import SessionStore
+from anvil.session import SessionStore
 
 
 class SessionStoreTests(unittest.TestCase):

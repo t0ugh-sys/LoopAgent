@@ -1,10 +1,10 @@
 """
-Browser Automation Tool Extension for LoopAgent
+Browser Automation Tool Extension for Anvil
 
 This is an optional extension that provides browser automation capabilities
 using Playwright. To use this, install the extra dependencies:
 
-    pip install loopagent[browser]
+    pip install Anvil[browser]
     # or
     pip install playwright
     playwright install chromium
@@ -31,10 +31,10 @@ try:
     from playwright.sync_api import sync_playwright, Page, Browser
 except ImportError:
     raise ImportError(
-        "Browser tools require playwright. Install with: pip install loopagent[browser]"
+        "Browser tools require playwright. Install with: pip install Anvil[browser]"
     )
 
-from loop_agent.agent_protocol import ToolCall, ToolResult
+from anvil.agent_protocol import ToolCall, ToolResult
 
 
 @dataclass(frozen=True)
@@ -149,7 +149,7 @@ def build_browser_tools() -> dict[str, BrowserToolFn]:
 
 
 class BrowserManager:
-    """Manages browser lifecycle for LoopAgent."""
+    """Manages browser lifecycle for Anvil."""
     
     def __init__(self, workspace_root: Path | None = None):
         self.workspace_root = workspace_root or Path.cwd()

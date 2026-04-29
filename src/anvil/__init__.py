@@ -1,4 +1,4 @@
-from .core.agent import LoopAgent, RunResult, StepContext, StepResult
+from .core.agent import AnvilAgent, RunResult, StepContext, StepResult
 from .core.serialization import run_result_to_dict, run_result_to_json
 from .core.stop import StopConfig, StopReason
 from .memory import JsonlMemoryStore, MemoryContext, MemoryStore
@@ -30,7 +30,7 @@ from . import session
 from . import tool_spec
 
 __all__ = [
-    'LoopAgent',
+    'AnvilAgent',
     'RunResult',
     'StepContext',
     'StepResult',

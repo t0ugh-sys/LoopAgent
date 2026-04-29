@@ -6,7 +6,7 @@ import unittest
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.llm.providers import build_invoke_from_args
+from anvil.llm.providers import build_invoke_from_args
 
 
 class ProviderFallbackTests(unittest.TestCase):

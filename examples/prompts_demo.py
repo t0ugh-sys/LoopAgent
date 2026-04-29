@@ -2,7 +2,7 @@
 Example: Using prompt templates
 """
 
-from loop_agent.prompts import (
+from anvil.prompts import (
     get_template,
     list_templates,
     register_template,

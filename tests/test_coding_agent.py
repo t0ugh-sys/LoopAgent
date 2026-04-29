@@ -7,8 +7,8 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.coding_agent import CodingAgentState, build_coding_step
-from loop_agent.core.types import StepContext
+from anvil.coding_agent import CodingAgentState, build_coding_step
+from anvil.core.types import StepContext
 
 
 class CodingAgentTests(unittest.TestCase):

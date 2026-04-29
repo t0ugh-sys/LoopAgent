@@ -1,13 +1,13 @@
-# LoopAgent Dockerfile
+# Anvil Dockerfile
 #
-# Build: docker build -t loopagent .
-# Run:   docker run -it --rm loopagent --goal "your goal"
+# Build: docker build -t anvil .
+# Run:   docker run -it --rm anvil --goal "your goal"
 #
 # Supports Python 3.10+
 
 FROM python:3.10-slim
 
-LABEL maintainer="LoopAgent"
+LABEL maintainer="Anvil"
 LABEL description="Enterprise-grade loop agent skeleton"
 
 # Install Node.js for npm wrapper
@@ -31,8 +31,8 @@ RUN pip install --no-cache-dir -e .
 COPY bin/ ./bin/
 
 # Make npm wrapper executable
-RUN chmod +x bin/loopagent.js
+RUN chmod +x bin/anvil.js
 
 # Default command
-ENTRYPOINT ["python", "-m", "loop_agent.agent_cli"]
+ENTRYPOINT ["python", "-m", "anvil.agent_cli"]
 CMD ["--help"]

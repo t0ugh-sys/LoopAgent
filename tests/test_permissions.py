@@ -7,10 +7,10 @@ from pathlib import Path
 
 import _bootstrap  # noqa: F401
 
-from loop_agent.agent_protocol import ToolCall
-from loop_agent.permissions import PermissionManager
-from loop_agent.policies import Capability, ToolPolicy
-from loop_agent.tools import ToolContext, build_default_tools, execute_tool_call
+from anvil.agent_protocol import ToolCall
+from anvil.permissions import PermissionManager
+from anvil.policies import Capability, ToolPolicy
+from anvil.tools import ToolContext, build_default_tools, execute_tool_call
 
 
 class PermissionManagerTests(unittest.TestCase):

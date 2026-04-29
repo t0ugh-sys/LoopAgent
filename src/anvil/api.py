@@ -10,9 +10,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 
-from loop_agent.core.agent import LoopAgent
-from loop_agent.core.types import StopConfig
-from loop_agent.steps.json_loop import JsonLoopState, make_json_decision_step
+from anvil.core.agent import AnvilAgent
+from anvil.core.types import StopConfig
+from anvil.steps.json_loop import JsonLoopState, make_json_decision_step
 
 from .errors import validate_goal, validate_max_steps, validate_temperature
 
@@ -63,7 +63,7 @@ class AgentResult:
         }
 
 
-class LoopAgentAPI:
+class AnvilAPI:
     """High-level API for Anvil."""
     
     def __init__(self, config: AgentConfig | None = None):
@@ -71,7 +71,7 @@ class LoopAgentAPI:
         # Using Any for flexibility - actual decider has 5 parameters
         self._invoke_fn: Any = None
     
-    def set_provider(self, invoke_fn: Callable[..., str]) -> "LoopAgentAPI":
+    def set_provider(self, invoke_fn: Callable[..., str]) -> "AnvilAPI":
         """Set custom LLM provider function."""
         self._invoke_fn = invoke_fn
         return self
@@ -90,7 +90,7 @@ class LoopAgentAPI:
                 )
             else:
                 # Use mock provider
-                from loop_agent.llm.providers import _mock_invoke_factory
+                from anvil.llm.providers import _mock_invoke_factory
                 invoke_fn = _mock_invoke_factory(
                     model=self.config.model,
                     mode="json"
@@ -105,7 +105,7 @@ class LoopAgentAPI:
                 max_steps=self.config.max_steps,
                 max_elapsed_s=self.config.timeout_s,
             )
-            agent = LoopAgent(step=step, stop=stop)
+            agent = AnvilAgent(step=step, stop=stop)
             
             # Run
             result = agent.run(
@@ -133,7 +133,7 @@ class LoopAgentAPI:
     
     def run_coding(self, goal: str) -> AgentResult:
         """Run the coding agent with a goal."""
-        from loop_agent.coding_agent import run_coding_agent, build_coding_step
+        from anvil.coding_agent import run_coding_agent, build_coding_step
         
         goal = validate_goal(goal)
         
@@ -182,14 +182,14 @@ def create_agent(
     provider: str = "mock",
     model: str = "mock-model",
     **kwargs: Any,
-) -> LoopAgentAPI:
+) -> AnvilAPI:
     """Create a configured agent."""
     config = AgentConfig(
         provider=provider,
         model=model,
         **kwargs,
     )
-    return LoopAgentAPI(config)
+    return AnvilAPI(config)
 
 
 def run_goal(
@@ -211,7 +211,7 @@ def run_goal(
 
 # Example usage:
 """
-from loop_agent.api import run_goal
+from anvil.api import run_goal
 
 # Simple usage
 result = run_goal("Hello, world!")

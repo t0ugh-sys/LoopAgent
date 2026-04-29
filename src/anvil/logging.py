@@ -33,7 +33,7 @@ class Logger:
     
     def __init__(
         self,
-        name: str = "loop_agent",
+        name: str = "anvil",
         level: LogLevel = LogLevel.INFO,
         output: LogOutput = LogOutput.STDOUT,
         file_path: str | Path | None = None,
@@ -111,7 +111,7 @@ _default_logger: Logger | None = None
 
 
 def get_logger(
-    name: str = "loop_agent",
+    name: str = "anvil",
     level: str = "INFO",
     output: str = "stdout",
     file_path: str | Path | None = None,
