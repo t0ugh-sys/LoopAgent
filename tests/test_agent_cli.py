@@ -12,7 +12,8 @@ import _bootstrap  # noqa: F401
 
 from anvil.agent_cli import _build_coding_decider, _run_code_command, _should_launch_interactive, build_parser
 from anvil.commands import execute_slash_command, parse_slash_command
-from anvil.session import SessionStore
+from anvil.commands.slash import render_session_status
+from anvil.session import SessionState, SessionStore
 from anvil.services.cli_commands import _render_pretty_replay
 from anvil.services.runtime_config import RuntimeConfigManager
 from anvil.skills import SkillLoader
@@ -60,6 +61,7 @@ class AgentCliTests(unittest.TestCase):
     def test_should_parse_help_and_resume_slash_commands(self) -> None:
         self.assertEqual(parse_slash_command('/help').name, 'help')
         self.assertEqual(parse_slash_command('/resume now').argument, 'now')
+        self.assertEqual(parse_slash_command('/status').name, 'status')
         self.assertEqual(parse_slash_command('/provider anthropic').argument, 'anthropic')
         self.assertEqual(parse_slash_command('/config').name, 'config')
         self.assertEqual(parse_slash_command('/wire-api responses').argument, 'responses')
@@ -419,6 +421,37 @@ class AgentCliTests(unittest.TestCase):
         self.assertIn('todo_write', output)
         self.assertIn('allow', output)
         self.assertIn('run_finished', output)
+
+    def test_should_render_session_status_with_todos_and_permissions(self) -> None:
+        state = SessionState(
+            session_id='s1',
+            workspace_root='D:/workspace/Anvil',
+            goal='inspect runtime',
+            status='active',
+            created_at='2026-04-29T10:00:00Z',
+            updated_at='2026-04-29T10:01:00Z',
+            history_tail=['user: hello', 'assistant: ok'],
+            tool_history=[
+                {'name': 'read_file', 'ok': True, 'permission_decision': 'allow'},
+                {'name': 'run_command_async', 'ok': False, 'permission_decision': 'ask'},
+            ],
+            todo_state={'lines': ['[x] inspect repo', '[-] switch model']},
+            permission_cache={},
+            runtime_config={},
+            memory_run_dir='.anvil/runs/r1',
+            artifacts_dir='.anvil/runs/r1',
+            last_summary='working through runtime config',
+            permission_stats={'allow': 3, 'deny': 1, 'ask': 2},
+        )
+        output = render_session_status(
+            state,
+            runtime_config_text='runtime_config:\nprovider: anthropic\nmodel: claude-3-opus-20240229',
+        )
+        self.assertIn('session_id: s1', output)
+        self.assertIn('permission_stats: allow=3 deny=1 ask=2', output)
+        self.assertIn('todo_state:\n[x] inspect repo', output)
+        self.assertIn('recent_tools:\n- read_file [ok] permission=allow', output)
+        self.assertIn('runtime_config:\nprovider: anthropic', output)
 
 
 if __name__ == '__main__':

@@ -95,6 +95,7 @@ The default `anvil` entrypoint starts an interactive session-first runtime. It p
 
 ```text
 /help
+/status
 /config
 /provider anthropic
 /model claude-3-opus-20240229
@@ -106,6 +107,7 @@ The default `anvil` entrypoint starts an interactive session-first runtime. It p
 ```
 
 You can switch provider and model during the same interactive session. The current runtime config is persisted in the session and restored on resume.
+Use `/status` to inspect the current session, todo state, permission counts, and recent tool activity.
 
 `anvil code ...` remains the explicit non-interactive batch runtime.
 

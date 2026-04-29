@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Iterable
 
-from ..session import SessionStore
+from ..session import SessionState, SessionStore
 from ..tool_spec import ToolSpec
 
 
@@ -17,6 +17,48 @@ class SlashCommand:
 class CommandResult:
     output: str
     should_continue: bool = True
+
+
+def render_session_status(
+    state: SessionState,
+    *,
+    runtime_config_text: str,
+) -> str:
+    history = '\n'.join(state.history_tail[-5:]) if state.history_tail else '(empty)'
+    summary = state.last_summary or '(empty)'
+    todo_lines = state.todo_state.get('lines', []) if isinstance(state.todo_state, dict) else []
+    if isinstance(todo_lines, list) and todo_lines:
+        todo_text = '\n'.join(str(item) for item in todo_lines[-8:])
+    else:
+        todo_text = '(empty)'
+    recent_tools = state.tool_history[-5:]
+    if recent_tools:
+        tool_lines = []
+        for item in recent_tools:
+            if not isinstance(item, dict):
+                continue
+            name = str(item.get('name') or '(unknown)')
+            ok = 'ok' if item.get('ok') else 'error'
+            permission = str(item.get('permission_decision') or '-')
+            tool_lines.append(f'- {name} [{ok}] permission={permission}')
+        tool_text = '\n'.join(tool_lines) if tool_lines else '(empty)'
+    else:
+        tool_text = '(empty)'
+    return (
+        f'session_id: {state.session_id}\n'
+        f'workspace: {state.workspace_root}\n'
+        f'goal: {state.goal or "(empty)"}\n'
+        f'status: {state.status}\n'
+        f'memory_run_dir: {state.memory_run_dir or "(empty)"}\n'
+        f'artifacts_dir: {state.artifacts_dir or "(empty)"}\n'
+        f'permission_stats: allow={state.permission_stats.get("allow", 0)} '
+        f'deny={state.permission_stats.get("deny", 0)} ask={state.permission_stats.get("ask", 0)}\n'
+        f'last_summary: {summary}\n'
+        f'{runtime_config_text}\n'
+        f'todo_state:\n{todo_text}\n'
+        f'recent_tools:\n{tool_text}\n'
+        f'history_tail:\n{history}'
+    )
 
 
 def parse_slash_command(line: str) -> SlashCommand | None:
@@ -41,6 +83,7 @@ def execute_slash_command(
             output=(
                 'Commands:\n'
                 '/help   Show this help\n'
+                '/status Show current session status\n'
                 '/config Show current runtime config\n'
                 '/provider <name> Set provider for the current session\n'
                 '/model <name> Set model for the current session\n'
@@ -83,22 +126,10 @@ def execute_slash_command(
     if command.name == 'tools':
         names = [spec.name for spec in sorted(tool_specs, key=lambda item: item.name)]
         return CommandResult(output='\n'.join(names) if names else 'No tools registered.')
-    if command.name == 'resume':
+    if command.name in {'resume', 'status'}:
         state = session_store.state
-        history = '\n'.join(state.history_tail[-5:]) if state.history_tail else '(empty)'
-        summary = state.last_summary or '(empty)'
         config_text = runtime_config_manager.summary() if runtime_config_manager is not None else 'runtime config unavailable'
-        return CommandResult(
-            output=(
-                f'session_id: {state.session_id}\n'
-                f'workspace: {state.workspace_root}\n'
-                f'goal: {state.goal or "(empty)"}\n'
-                f'status: {state.status}\n'
-                f'last_summary: {summary}\n'
-                f'{config_text}\n'
-                f'history_tail:\n{history}'
-            )
-        )
+        return CommandResult(output=render_session_status(state, runtime_config_text=config_text))
     if command.name == 'exit':
         return CommandResult(output='bye', should_continue=False)
     return CommandResult(output=f'Unknown command: /{command.name}')

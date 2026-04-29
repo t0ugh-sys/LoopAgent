@@ -26,7 +26,10 @@ class InteractiveRuntime:
             f'Anvil interactive session {self.session_store.state.session_id} '
             f'({self.session_store.state.workspace_root})'
         )
-        self._write_line('Type /help for commands. Use /provider and /model to switch models during the session.')
+        self._write_line(
+            'Type /help for commands. Use /status to inspect the session. '
+            'Use /provider and /model to switch models during the session.'
+        )
         while True:
             self._write('anvil> ')
             line = self.stdin.readline()
