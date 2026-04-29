@@ -98,6 +98,37 @@ class AgentCliTests(unittest.TestCase):
         self.assertEqual(args.command, 'doctor')
         self.assertEqual(args.base_url, 'https://example.com/v1')
 
+    def test_should_run_team_add_task_command(self) -> None:
+        parser = build_parser()
+        tmp_dir = Path('tests/.tmp') / f'team-{uuid.uuid4().hex}'
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            args = parser.parse_args(
+                [
+                    'team',
+                    'add-task',
+                    '--workspace',
+                    str(tmp_dir),
+                    '--team-dir',
+                    '.team-dev',
+                    '--goal',
+                    'inspect runtime',
+                    '--title',
+                    'Inspect Runtime',
+                    '--output',
+                    'json',
+                ]
+            )
+            buffer = io.StringIO()
+            with patch('sys.stdout', buffer):
+                self.assertEqual(args.handler(args), 0)
+            payload = json.loads(buffer.getvalue())
+            self.assertIn('.team-dev', payload['team_dir'])
+            self.assertEqual(payload['task']['goal'], 'inspect runtime')
+            self.assertEqual(payload['task']['title'], 'Inspect Runtime')
+        finally:
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
     def test_should_execute_resume_slash_command(self) -> None:
         tmp_dir = Path('tests/.tmp') / f'session-{uuid.uuid4().hex}'
         tmp_dir.mkdir(parents=True, exist_ok=True)

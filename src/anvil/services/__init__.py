@@ -5,6 +5,14 @@ from .cli_commands import (
     run_skills_command,
     run_tools_command,
 )
+from .team_commands import (
+    run_team_add_task_command,
+    run_team_broadcast_command,
+    run_team_run_command,
+    run_team_send_command,
+    run_team_serve_command,
+    run_team_shutdown_command,
+)
 from .coding_runtime import (
     build_coding_decider,
     build_coding_prompt,
@@ -25,6 +33,12 @@ __all__ = [
     'run_doctor_command',
     'run_replay_command',
     'run_skills_command',
+    'run_team_add_task_command',
+    'run_team_broadcast_command',
+    'run_team_run_command',
+    'run_team_send_command',
+    'run_team_serve_command',
+    'run_team_shutdown_command',
     'run_tools_command',
     'build_coding_decider',
     'build_coding_prompt',
